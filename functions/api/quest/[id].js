@@ -1,98 +1,73 @@
 const API_ROOT = 'https://gi.yatta.moe/api/v2'
+const SUPPORTED = new Set(['CHS','CHT','EN','JP','KR','DE','ES','FR','ID','PT','RU','TH','VI','IT','TR'])
 const values = (object) => object ? Object.values(object) : []
 const clean = (text = '') => String(text || '').replace(/\$(?:HIDDEN|UNRELEASED)/g, '').trim()
 const findById = (collection, id) => values(collection).find((item) => String(item?.id) === String(id))
 
 async function fetchLanguage(lang, id) {
-  const response = await fetch(`${API_ROOT}/${lang}/quest/${id}`, {
-    headers: { 'user-agent': 'Teyvat-Scriptorium/0.2' },
-  })
+  const response = await fetch(`${API_ROOT}/${lang}/quest/${id}`, { headers: { 'user-agent': 'Teyvat-Scriptorium/0.4' } })
   if (!response.ok) return null
   const payload = await response.json()
   return payload.response === 200 ? payload.data : null
 }
 
-function collectLines(primaryStep, secondaryStep, primaryLang) {
-  const lines = []
-  const primaryTasks = values(primaryStep?.taskData)
-  const secondaryTasks = values(secondaryStep?.taskData)
-  primaryTasks.forEach((task, taskIndex) => {
-    if (!task?.items) return
-    const otherTask = secondaryTasks[taskIndex]
-    Object.entries(task.items).forEach(([itemId, item]) => {
-      const otherItem = otherTask?.items?.[itemId]
-      const texts = values(item.text)
-      const otherTexts = values(otherItem?.text)
-      const count = Math.max(texts.length, otherTexts.length)
-      for (let variant = 0; variant < count; variant += 1) {
-        const primaryText = texts[variant]?.text || ''
-        const secondaryText = otherTexts[variant]?.text || ''
-        if (!primaryText && !secondaryText) continue
-        const isZh = primaryLang === 'zh'
-        const choice = !item.role || itemId.endsWith('-player') || item.type === 'MultiDialog'
-        lines.push({
-          key: `${primaryStep.id}-${taskIndex}-${itemId}-${variant}`,
-          nodeId: itemId,
-          variant,
-          kind: choice ? 'choice' : item.isBlackScreen ? 'narration' : 'dialogue',
-          speaker: isZh
-            ? { zh: item.role || '旅行者', en: otherItem?.role || 'Traveler' }
-            : { zh: otherItem?.role || '旅行者', en: item.role || 'Traveler' },
-          text: isZh
-            ? { zh: primaryText, en: secondaryText }
-            : { zh: secondaryText, en: primaryText },
-        })
-      }
-    })
-  })
-  return lines
+function localized(translations, fallback = '') {
+  const first = Object.values(translations).find(Boolean) || fallback
+  return { zh: translations.CHS || first, en: translations.EN || first, translations }
 }
 
-function normalize(zh, en, id) {
-  const primary = zh || en
-  const secondary = zh ? en : null
-  const primaryLang = zh ? 'zh' : 'en'
-  const quests = values(primary.storyList).map((quest, index) => {
-    const otherQuest = findById(secondary?.storyList, quest.id) || values(secondary?.storyList)[index]
+function normalize(dataByLang, id, languages) {
+  const primaryLang = dataByLang.CHS ? 'CHS' : languages.find((lang) => dataByLang[lang])
+  const primary = dataByLang[primaryLang]
+  const primaryQuests = values(primary.storyList)
+  const quests = primaryQuests.map((quest, questIndex) => {
+    const questByLang = Object.fromEntries(languages.map((lang) => [lang, findById(dataByLang[lang]?.storyList, quest.id) || values(dataByLang[lang]?.storyList)[questIndex]]))
     const scenes = values(quest.story).map((step) => {
-      const otherStep = findById(otherQuest?.story, step.id)
-      const lines = collectLines(step, otherStep, primaryLang)
-      return {
-        key: `${quest.id}-${step.id}`,
-        id: step.id,
-        hidden: Boolean(step.isHidden),
-        title: primaryLang === 'zh'
-          ? { zh: clean(step.title) || '未命名场景', en: clean(otherStep?.title) || 'Untitled scene' }
-          : { zh: clean(otherStep?.title) || '未命名场景', en: clean(step.title) || 'Untitled scene' },
-        description: primaryLang === 'zh'
-          ? { zh: step.stepDescription || '', en: otherStep?.stepDescription || '' }
-          : { zh: otherStep?.stepDescription || '', en: step.stepDescription || '' },
-        lines,
-      }
+      const stepByLang = Object.fromEntries(languages.map((lang) => [lang, findById(questByLang[lang]?.story, step.id)]))
+      const primaryTasks = values(step.taskData)
+      const lines = []
+      primaryTasks.forEach((task, taskIndex) => {
+        if (!task?.items) return
+        Object.entries(task.items).forEach(([itemId, item]) => {
+          const itemByLang = Object.fromEntries(languages.map((lang) => {
+            const otherTask = values(stepByLang[lang]?.taskData)[taskIndex]
+            return [lang, otherTask?.items?.[itemId]]
+          }))
+          const maxVariants = Math.max(...languages.map((lang) => values(itemByLang[lang]?.text).length), 0)
+          for (let variant = 0; variant < maxVariants; variant += 1) {
+            const textMap = Object.fromEntries(languages.map((lang) => [lang, values(itemByLang[lang]?.text)[variant]?.text || '']))
+            if (!Object.values(textMap).some(Boolean)) continue
+            const roleMap = Object.fromEntries(languages.map((lang) => [lang, itemByLang[lang]?.role || (lang === 'CHS' ? '旅行者' : lang === 'EN' ? 'Traveler' : '')]))
+            const choice = !item.role || itemId.endsWith('-player') || item.type === 'MultiDialog'
+            lines.push({
+              key: `${step.id}-${taskIndex}-${itemId}-${variant}`,
+              nodeId: itemId,
+              variant,
+              kind: choice ? 'choice' : item.isBlackScreen ? 'narration' : 'dialogue',
+              speaker: localized(roleMap, 'Traveler'),
+              text: localized(textMap),
+            })
+          }
+        })
+      })
+      const titleMap = Object.fromEntries(languages.map((lang) => [lang, clean(stepByLang[lang]?.title)]))
+      const descriptionMap = Object.fromEntries(languages.map((lang) => [lang, stepByLang[lang]?.stepDescription || '']))
+      return { key: `${quest.id}-${step.id}`, id: step.id, hidden: Boolean(step.isHidden), title: localized(titleMap, 'Untitled scene'), description: localized(descriptionMap), lines }
     }).filter((scene) => scene.lines.length)
-    const info = quest.info || {}
-    const otherInfo = otherQuest?.info || {}
-    return {
-      id: quest.id,
-      order: index + 1,
-      title: primaryLang === 'zh' ? { zh: info.title || '', en: otherInfo.title || '' } : { zh: otherInfo.title || '', en: info.title || '' },
-      description: primaryLang === 'zh' ? { zh: info.description || '', en: otherInfo.description || '' } : { zh: otherInfo.description || '', en: info.description || '' },
-      scenes,
-    }
+    const titleMap = Object.fromEntries(languages.map((lang) => [lang, questByLang[lang]?.info?.title || '']))
+    const descriptionMap = Object.fromEntries(languages.map((lang) => [lang, questByLang[lang]?.info?.description || '']))
+    return { id: quest.id, order: questIndex + 1, title: localized(titleMap), description: localized(descriptionMap), scenes }
   })
+  const infoMap = (field) => localized(Object.fromEntries(languages.map((lang) => [lang, dataByLang[lang]?.info?.[field] || ''])))
   const allScenes = quests.flatMap((quest) => quest.scenes)
   const allLines = allScenes.flatMap((scene) => scene.lines)
-  const primaryInfo = primary.info || {}
-  const secondaryInfo = secondary?.info || {}
-  const pair = (field) => primaryLang === 'zh'
-    ? { zh: primaryInfo[field] || '', en: secondaryInfo[field] || '' }
-    : { zh: secondaryInfo[field] || '', en: primaryInfo[field] || '' }
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: new Date().toISOString(),
+    languages,
     source: { primary: 'Project Amber / Yatta', url: `https://gi.yatta.moe/en/archive/quest/${id}`, verification: `https://gensh.honeyhunterworld.com/ch_${id}/?lang=EN` },
-    chapter: { id: Number(id), number: pair('chapterNum'), title: pair('chapterTitle'), region: pair('chapterImageTitle') },
-    stats: { quests: quests.length, scenes: allScenes.length, lines: allLines.length, missingPairs: allLines.filter((line) => !line.text.zh || !line.text.en).length },
+    chapter: { id: Number(id), number: infoMap('chapterNum'), title: infoMap('chapterTitle'), region: infoMap('chapterImageTitle') },
+    stats: { quests: quests.length, scenes: allScenes.length, lines: allLines.length, missingPairs: allLines.filter((line) => languages.some((lang) => !line.text.translations?.[lang])).length },
     quests,
   }
 }
@@ -100,16 +75,18 @@ function normalize(zh, en, id) {
 export async function onRequestGet(context) {
   const id = String(context.params.id || '')
   if (!/^\d{2,6}$/.test(id)) return Response.json({ error: 'Invalid quest id' }, { status: 400 })
+  const url = new URL(context.request.url)
+  const requested = (url.searchParams.get('langs') || 'CHS,EN').split(',').map((lang) => lang.toUpperCase()).filter((lang, index, list) => SUPPORTED.has(lang) && list.indexOf(lang) === index).slice(0, 3)
+  const languages = requested.length ? requested : ['CHS','EN']
   try {
     const cache = caches.default
-    const cacheKey = new Request(context.request.url, context.request)
+    const cacheKey = new Request(`${url.origin}${url.pathname}?langs=${languages.join(',')}`, context.request)
     const hit = await cache.match(cacheKey)
     if (hit) return hit
-    const [zh, en] = await Promise.all([fetchLanguage('CHS', id), fetchLanguage('EN', id)])
-    if (!zh && !en) return Response.json({ error: 'Quest not found upstream' }, { status: 404 })
-    const response = Response.json(normalize(zh, en, id), {
-      headers: { 'Cache-Control': 'public, max-age=86400, s-maxage=604800', 'X-Data-Source': 'Project-Amber' },
-    })
+    const payloads = await Promise.all(languages.map((lang) => fetchLanguage(lang, id)))
+    const dataByLang = Object.fromEntries(languages.map((lang, index) => [lang, payloads[index]]))
+    if (!payloads.some(Boolean)) return Response.json({ error: 'Quest not found upstream' }, { status: 404 })
+    const response = Response.json(normalize(dataByLang, id, languages), { headers: { 'Cache-Control': 'public, max-age=86400, s-maxage=604800', 'X-Data-Source': 'Project-Amber' } })
     context.waitUntil(cache.put(cacheKey, response.clone()))
     return response
   } catch (error) {

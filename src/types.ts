@@ -1,4 +1,5 @@
-export type LanguagePair = { zh: string; en: string }
+export type LanguageCode = 'CHS' | 'CHT' | 'EN' | 'JP' | 'KR' | 'DE' | 'ES' | 'FR' | 'ID' | 'PT' | 'RU' | 'TH' | 'VI' | 'IT' | 'TR'
+export type LanguagePair = { zh: string; en: string; translations?: Partial<Record<LanguageCode, string>> }
 
 export type DialogueLine = {
   key: string
@@ -40,9 +41,8 @@ export type ChapterData = {
   quests: Quest[]
 }
 
-export type ViewMode = 'parallel' | 'stacked' | 'zh' | 'en' | 'compact'
+export type ViewMode = 'parallel' | 'stacked' | 'compact'
 export type Traveler = 'aether' | 'lumine'
-export type PrintPreset = 'parallel' | 'study' | 'zh' | 'en'
 
 export type CatalogItem = {
   id: number
@@ -83,10 +83,12 @@ export type AppSettings = {
   showHidden: boolean
   showUnreleased: boolean
   compactMobile: boolean
+  languages: LanguageCode[]
+  fontFamily: 'serif' | 'sans' | 'yahei'
 }
 
 export type PrintSettings = {
-  layout: 'parallel' | 'stacked' | 'zh' | 'en'
+  layout: 'parallel' | 'stacked'
   density: 'comfortable' | 'compact' | 'ultra'
   paper: 'a4' | 'a5' | 'letter'
   orientation: 'portrait' | 'landscape'

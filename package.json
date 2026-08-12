@@ -1,7 +1,7 @@
 {
   "name": "teyvat-scriptorium",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,8 +18,6 @@
   "dependencies": {
     "@fontsource-variable/newsreader": "latest",
     "@fontsource/noto-serif-sc": "latest",
-    "html2canvas": "^1.4.1",
-    "html2pdf.js": "latest",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest"
