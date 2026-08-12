@@ -43,3 +43,65 @@ export type ChapterData = {
 export type ViewMode = 'parallel' | 'stacked' | 'zh' | 'en' | 'compact'
 export type Traveler = 'aether' | 'lumine'
 export type PrintPreset = 'parallel' | 'study' | 'zh' | 'en'
+
+export type CatalogItem = {
+  id: number
+  type: string
+  title: LanguagePair
+  chapter: LanguagePair
+  imageTitle: LanguagePair
+  route: string
+  chapterCount: number
+  icon: string | null
+  nation: string
+  nationSource: 'wiki' | 'title-inference' | 'unknown'
+  version: string | null
+  versionSource: 'yatta-changelog' | 'wiki' | 'unknown'
+  versionGroup: string
+  wikiPage: string | null
+  hidden: boolean
+  unreleased: boolean
+  languages: { zh: boolean; en: boolean }
+}
+
+export type CatalogData = {
+  schemaVersion: number
+  generatedAt: string
+  source: string
+  versionCoverage: { exactFrom: string; note: string }
+  versions: string[]
+  counts: { total: number; byType: Record<string, number>; byNation: Record<string, number> }
+  items: CatalogItem[]
+}
+
+export type AppSettings = {
+  theme: 'light' | 'dark' | 'auto'
+  viewMode: ViewMode
+  zhSize: number
+  enSize: number
+  lineHeight: number
+  showHidden: boolean
+  showUnreleased: boolean
+  compactMobile: boolean
+}
+
+export type PrintSettings = {
+  layout: 'parallel' | 'stacked' | 'zh' | 'en'
+  density: 'comfortable' | 'compact' | 'ultra'
+  paper: 'a4' | 'a5' | 'letter'
+  orientation: 'portrait' | 'landscape'
+  fontSize: number
+  margin: number
+  color: 'full' | 'accent' | 'mono'
+  cover: boolean
+  sceneTitles: boolean
+  speakers: boolean
+  lineNumbers: boolean
+  bands: {
+    header: PrintSlot[]
+    footer: PrintSlot[]
+  }
+}
+
+export type PrintSlotContent = 'none' | 'chapter' | 'quest' | 'printedAt' | 'version' | 'page' | 'custom'
+export type PrintSlot = { id: string; content: PrintSlotContent; custom: string }

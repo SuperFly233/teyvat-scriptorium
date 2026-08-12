@@ -1,19 +1,25 @@
 {
   "name": "teyvat-scriptorium",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "data:fetch": "node scripts/fetch-quest.mjs 1700",
+    "data:catalog": "node --use-env-proxy scripts/fetch-catalog.mjs",
+    "data:update": "npm run data:catalog && npm run data:fetch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "publish:pages": "npm test && npm run build && wrangler pages deploy ./dist --project-name teyvat-scriptorium --branch main",
+    "publish": "git push origin main && npm run publish:pages"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "latest",
     "@fontsource/noto-serif-sc": "latest",
+    "html2canvas": "^1.4.1",
+    "html2pdf.js": "latest",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest"

@@ -1,45 +1,62 @@
 import { mkdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { chromium } from 'playwright'
 
-const baseUrl = process.argv[2] || 'http://127.0.0.1:4173'
+const baseUrl = process.argv[2] || 'http://127.0.0.1:8788'
 await mkdir('screenshots', { recursive: true })
 const browser = await chromium.launch({ headless: true })
 
-async function inspect(name, viewport, options = {}) {
+async function capture(name, path, viewport, { scroll = 0, action } = {}) {
   const page = await browser.newPage({ viewport })
-  if (options.print) await page.emulateMedia({ media: 'print' })
-  await page.goto(baseUrl, { waitUntil: 'networkidle' })
-  await page.locator('.scene').first().waitFor()
-  if (options.scroll) await page.evaluate(() => window.scrollTo(0, 850))
+  await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' })
+  if (action) await action(page)
+  if (scroll) await page.evaluate((y) => window.scrollTo(0, y), scroll)
   await page.waitForTimeout(250)
   const metrics = await page.evaluate(() => {
     const doc = document.scrollingElement
-    const toolbar = document.querySelector('.reader-toolbar')?.getBoundingClientRect()
-    const search = document.querySelector('.search-box')?.getBoundingClientRect()
-    const firstScene = document.querySelector('.scene')?.getBoundingClientRect()
+    const sticky = document.querySelector('.reader-toolbar')?.getBoundingClientRect()
+    const search = (document.querySelector('.catalog-search') || document.querySelector('.reader-search'))?.getBoundingClientRect()
+    const controls = (document.querySelector('.catalog-controls') || document.querySelector('.reader-toolbar'))?.getBoundingClientRect()
+    const first = (document.querySelector('.catalog-card') || document.querySelector('.scene-block'))?.getBoundingClientRect()
     return {
-      viewport: [window.innerWidth, window.innerHeight],
-      pageWidth: doc?.scrollWidth,
-      clientWidth: doc?.clientWidth,
+      viewport: [innerWidth, innerHeight], pageWidth: doc?.scrollWidth, clientWidth: doc?.clientWidth,
       horizontalOverflow: Boolean(doc && doc.scrollWidth > doc.clientWidth),
-      toolbar: toolbar && { top: Math.round(toolbar.top), height: Math.round(toolbar.height), width: Math.round(toolbar.width) },
+      sticky: sticky && { top: Math.round(sticky.top), height: Math.round(sticky.height) },
       search: search && { width: Math.round(search.width), height: Math.round(search.height) },
-      firstScene: firstScene && { top: Math.round(firstScene.top), height: Math.round(firstScene.height) },
+      controls: controls && { top: Math.round(controls.top), height: Math.round(controls.height) },
+      first: first && { top: Math.round(first.top), height: Math.round(first.height) },
     }
   })
-  await page.screenshot({ path: `screenshots/${name}.png`, fullPage: Boolean(options.fullPage) })
+  await page.screenshot({ path: `screenshots/${name}.png`, fullPage: false })
   console.log(name, JSON.stringify(metrics))
   await page.close()
 }
 
-await inspect('desktop', { width: 1440, height: 900 })
-await inspect('desktop-scrolled', { width: 1440, height: 900 }, { scroll: true })
-await inspect('mobile', { width: 390, height: 844 })
-await inspect('print-first-page', { width: 794, height: 1123 }, { print: true })
+await capture('catalog-desktop', '/', { width: 1440, height: 900 })
+await capture('catalog-mobile', '/', { width: 390, height: 844 })
+await capture('reader-desktop', '/?chapter=1700', { width: 1440, height: 900 })
+await capture('reader-scrolled', '/?chapter=1700', { width: 1440, height: 900 }, { scroll: 650 })
+await capture('reader-mobile', '/?chapter=1700', { width: 390, height: 844 })
+await capture('reader-mobile-select', '/?chapter=1700', { width: 390, height: 844 }, { action: async (page) => { await page.locator('.mobile-action-dock button').nth(1).click() } })
+await capture('print-studio', '/?chapter=1700', { width: 1440, height: 900 }, { action: async (page) => { await page.locator('.desktop-print-fab').click() } })
 
-const printPage = await browser.newPage()
-await printPage.goto(baseUrl, { waitUntil: 'networkidle' })
-await printPage.locator('.scene').first().waitFor()
-await printPage.pdf({ path: 'screenshots/print-parallel.pdf', format: 'A4', printBackground: true, margin: { top: '0', right: '0', bottom: '0', left: '0' } })
-console.log('print-pdf', JSON.stringify({ saved: true }))
+const pdfPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+await pdfPage.goto(`${baseUrl}/?chapter=1700`, { waitUntil: 'networkidle' })
+await pdfPage.locator('.desktop-print-fab').click()
+await pdfPage.locator('.segment button', { hasText: '超紧凑' }).click()
+await pdfPage.emulateMedia({ media: 'print' })
+await pdfPage.pdf({ path: resolve('screenshots/print-ultra-compact.pdf'), format: 'A4', printBackground: true, margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' } })
+console.log('print-pdf', JSON.stringify({ path: 'screenshots/print-ultra-compact.pdf' }))
+const exportPage = await browser.newPage({ viewport: { width: 1440, height: 900 }, acceptDownloads: true })
+await exportPage.goto(`${baseUrl}/?chapter=1700`, { waitUntil: 'networkidle' })
+await exportPage.locator('.selection-toggle').click()
+await exportPage.locator('.selection-bar button', { hasText: '取消当前结果' }).click()
+await exportPage.locator('.line-select').first().click()
+await exportPage.locator('.desktop-print-fab').click()
+const downloadPromise = exportPage.waitForEvent('download', { timeout: 120000 })
+await exportPage.locator('.primary-action').click()
+const download = await downloadPromise
+await mkdir('tmp/pdfs', { recursive: true })
+await download.saveAs(resolve('tmp/pdfs/direct-export-selection.pdf'))
+console.log('direct-export', JSON.stringify({ filename: download.suggestedFilename() }))
 await browser.close()
