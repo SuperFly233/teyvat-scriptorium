@@ -105,3 +105,10 @@ export type PrintSettings = {
 
 export type PrintSlotContent = 'none' | 'chapter' | 'quest' | 'printedAt' | 'version' | 'page' | 'custom'
 export type PrintSlot = { id: string; content: PrintSlotContent; custom: string }
+
+export type PrintBundle = {
+  key: string
+  chapter: ChapterData['chapter']
+  quest: Omit<Quest, 'scenes'>
+  scenes: Scene[]
+}
