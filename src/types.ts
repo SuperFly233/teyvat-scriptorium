@@ -86,6 +86,10 @@ export type AppSettings = {
   languages: LanguageCode[]
   fontFamily: 'serif' | 'sans' | 'yahei'
   columnRatio: number
+  languageWidths: number[]
+  guideCatalog: boolean
+  guideReader: boolean
+  guideScenes: boolean
 }
 
 export type PrintSettings = {
@@ -101,6 +105,14 @@ export type PrintSettings = {
   speakers: boolean
   lineNumbers: boolean
   columnRatio: number
+  speakerLayout: 'column' | 'inline'
+  speakerSize: number
+  speakerWidth: number
+  numberSize: number
+  sceneTitleSize: number
+  coverTitleSize: number
+  lineGap: number
+  sceneGap: number
   bands: {
     header: PrintSlot[]
     footer: PrintSlot[]
@@ -115,4 +127,7 @@ export type PrintBundle = {
   chapter: ChapterData['chapter']
   quest: Omit<Quest, 'scenes'>
   scenes: Scene[]
+  taskType?: string
+  version?: string | null
+  nation?: string
 }

@@ -34,7 +34,8 @@ if (!await page.locator('.selection-select-all').count()) {
 await page.locator('.selection-select-all').click()
 await page.locator('.queue-inline').click()
 await page.locator('.basket-dock button').click()
-await page.getByRole('button', { name: '超紧凑' }).click()
+await page.locator('.basket-sheet .primary-action').click()
+await page.getByRole('button', { name: /超紧凑/ }).click()
 await page.waitForTimeout(300)
 
 const desktop = await page.evaluate(() => {

@@ -37,15 +37,16 @@ function collectLines(zhStep, enStep) {
         const zhText = zhTexts[textIndex]?.text || ''
         const enText = enTexts[textIndex]?.text || ''
         if (!zhText && !enText) continue
-        const isChoice = !zhItem.role || itemId.endsWith('-player') || zhItem.type === 'MultiDialog'
+        const isNarration = Boolean(zhItem.isBlackScreen)
+        const isChoice = !isNarration && (!zhItem.role || itemId.endsWith('-player') || zhItem.type === 'MultiDialog')
         lines.push({
           key: `${zhStep.id}-${taskIndex}-${itemId}-${textIndex}`,
           nodeId: itemId,
           variant: textIndex,
-          kind: isChoice ? 'choice' : zhItem.isBlackScreen ? 'narration' : 'dialogue',
+          kind: isNarration ? 'narration' : isChoice ? 'choice' : 'dialogue',
           speaker: {
-            zh: zhItem.role || '旅行者',
-            en: enItem?.role || 'Traveler',
+            zh: isNarration ? '' : zhItem.role || '旅行者',
+            en: isNarration ? '' : enItem?.role || 'Traveler',
           },
           text: { zh: zhText, en: enText },
         })
