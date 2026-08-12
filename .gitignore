@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+playwright-report/
+test-results/
+screenshots/
+tmp/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+*.log
