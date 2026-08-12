@@ -5,6 +5,7 @@ dist/
 playwright-report/
 test-results/
 screenshots/
+artifacts/
 tmp/
 *.tsbuildinfo
 vite.config.js
