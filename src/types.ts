@@ -85,6 +85,7 @@ export type AppSettings = {
   compactMobile: boolean
   languages: LanguageCode[]
   fontFamily: 'serif' | 'sans' | 'yahei'
+  columnRatio: number
 }
 
 export type PrintSettings = {
@@ -99,6 +100,7 @@ export type PrintSettings = {
   sceneTitles: boolean
   speakers: boolean
   lineNumbers: boolean
+  columnRatio: number
   bands: {
     header: PrintSlot[]
     footer: PrintSlot[]
