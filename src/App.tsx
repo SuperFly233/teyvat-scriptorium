@@ -1,8 +1,8 @@
-import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpenText, Check, CheckSquare2, ChevronDown, ChevronsUpDown, CircleCheck, Clock3,
-  Eraser, FileDown, FileText, Filter, GitFork, GripVertical, Info, Languages, LibraryBig, ListFilter, MousePointer2,
-  LoaderCircle, Menu, Moon, Plus, Printer, RotateCcw, Search,
+  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpenText, Check, CheckSquare2, ChevronDown, CircleCheck, Clock3,
+  Eraser, FileDown, FileText, Filter, GitFork, GripVertical, Info, Languages, LibraryBig, ListTree, MapPinned, MousePointer2,
+  LoaderCircle, Menu, Moon, Plus, Printer, RotateCcw, Search, SlidersHorizontal,
   Settings, ShoppingBasket, Snowflake, Square, Sun, Trash2, X, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { filterScenes } from './lib/filter'
@@ -14,7 +14,7 @@ import type {
 } from './types'
 
 const TYPE_NAMES: Record<string, string> = {
-  aq: '魔神任务', wq: '世界任务', lq: '角色任务', eq: '活动任务', iq: '每日委托', other: '其他',
+  aq: '魔神任务', wq: '世界任务', lq: '传说任务', hq:'邀约事件', eq: '活动任务', iq: '每日委托', other: '其他',
 }
 const NATION_NAMES: Record<string, string> = {
   mondstadt: '蒙德', liyue: '璃月', inazuma: '稻妻', sumeru: '须弥', fontaine: '枫丹',
@@ -52,7 +52,18 @@ const DEFAULT_PRINT: PrintSettings = {
     footer: [{ id: 'fl', content: 'version', custom: '' }, { id: 'fc', content: 'none', custom: '' }, { id: 'fr', content: 'page', custom: '' }],
   },
 }
-const APP_VERSION = 'v0.5.0'
+const APP_VERSION = 'v0.6.0'
+const TYPE_FILTERS = ['aq','lq','hq','wq','eq','iq','other']
+const REGION_MILESTONES:Record<string,{ nation:string; version:string; date:string; label:string }> = {
+  '1.0':{ nation:'mondstadt',version:'1.0',date:'2020-09-28',label:'蒙德与璃月' },
+  '2.0':{ nation:'inazuma',version:'2.0',date:'2021-07-21',label:'稻妻' },
+  '3.0':{ nation:'sumeru',version:'3.0',date:'2022-08-24',label:'须弥' },
+  '4.0':{ nation:'fontaine',version:'4.0',date:'2023-08-16',label:'枫丹' },
+  '5.0':{ nation:'natlan',version:'5.0',date:'2024-08-28',label:'纳塔' },
+  '6.0':{ nation:'nodkrai',version:'6.0',date:'2025-09-10',label:'挪德卡莱' },
+  '7.0':{ nation:'snezhnaya',version:'7.0',date:'2026-08-12',label:'至冬' },
+}
+const chapterFamily = (item:CatalogItem) => item.chapter.zh.match(/^(第[^ ]+章|空月之歌)/)?.[1] || item.chapter.zh || `${item.nation}:${item.version}`
 
 function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(() => {
@@ -83,7 +94,8 @@ function useData() {
     let cancelled = false
     const run = async () => {
       try {
-        const staticCatalog = await fetch('/data/catalog.json', { cache: 'no-store' }).then((response) => response.json()) as CatalogData
+        const [baseCatalog,hangouts] = await Promise.all([fetch('/data/catalog.json', { cache: 'no-store' }).then((response) => response.json()) as Promise<CatalogData>,fetch('/data/hangouts.json',{cache:'no-store'}).then((response)=>response.ok?response.json():{items:[]}).catch(()=>({items:[]}))])
+        const staticCatalog:CatalogData = { ...baseCatalog,items:[...hangouts.items,...baseCatalog.items] }
         if (cancelled) return
         setCatalog(staticCatalog)
         try {
@@ -160,10 +172,11 @@ function Header({ page, theme, onTheme, onCatalog, onSettings, onChangelog }: {
 
 function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: CatalogData; settings: AppSettings; onOpen: (item: CatalogItem) => void; sync: { checking: boolean; added: number; modified: number; checkedAt: string }; guideRequest:number }) {
   const [query, setQuery] = useSessionState('teyvat:catalog:query', '')
-  const [type, setType] = useSessionState('teyvat:catalog:type', 'all')
-  const [nation, setNation] = useSessionState('teyvat:catalog:nation', 'all')
-  const [version, setVersion] = useSessionState('teyvat:catalog:version', 'all')
+  const [types, setTypes] = useSessionState<string[]>('teyvat:catalog:types', [])
+  const [nations, setNations] = useSessionState<string[]>('teyvat:catalog:nations', [])
+  const [versions, setVersions] = useSessionState<string[]>('teyvat:catalog:versions', [])
   const [sort, setSort] = useSessionState<'version' | 'nation' | 'type' | 'id'>('teyvat:catalog:sort', 'version')
+  const [catalogView,setCatalogView] = useSessionState<'cards'|'journey'>('teyvat:catalog:view','cards')
   const [limit, setLimit] = useSessionState('teyvat:catalog:limit', 60)
   const [guideVisible, setGuideVisible] = useState(() => settings.guideCatalog && localStorage.getItem('teyvat:catalog-guide:v1') !== 'done')
   useEffect(() => { if (guideRequest) setGuideVisible(true) }, [guideRequest])
@@ -177,9 +190,9 @@ function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: Catalog
     const list = data.items.filter((item) => {
       if (!settings.showHidden && item.hidden) return false
       if (!settings.showUnreleased && item.unreleased) return false
-      if (type !== 'all' && item.type !== type) return false
-      if (nation !== 'all' && item.nation !== nation) return false
-      if (version !== 'all' && (version === 'unknown' ? item.version !== null : item.version !== version)) return false
+      if (types.length && !types.includes(item.type)) return false
+      if (nations.length && !nations.includes(item.nation)) return false
+      if (versions.length && !versions.some((version) => version === 'unknown' ? item.version === null : item.version === version)) return false
       return !needle || normalizeSearch(`${item.title.zh}${item.title.en}${item.chapter.zh}${item.chapter.en}${item.id}`).includes(needle)
     })
     return list.sort((a, b) => {
@@ -190,36 +203,48 @@ function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: Catalog
       const bv = b.version ? Number(b.version.replace('.', '')) : 0
       return bv - av || b.id - a.id
     })
-  }, [data, query, type, nation, version, sort, settings.showHidden, settings.showUnreleased])
+  }, [data, query, types, nations, versions, sort, settings.showHidden, settings.showUnreleased])
+  const actCounts = useMemo(() => new Map([...new Set(data.items.filter((item) => item.type === 'aq').map(chapterFamily))].map((family) => [family,data.items.filter((item) => item.type === 'aq' && chapterFamily(item) === family && !item.hidden && !item.unreleased).length])),[data])
+  const timeline = useMemo(() => [...new Set(data.items.map((item) => item.version).filter(Boolean) as string[])].sort((a,b) => Number(a.replace('.','')) - Number(b.replace('.',''))).map((version) => { const versionItems=data.items.filter((item) => item.version===version&&!item.hidden&&!item.unreleased); return { version,items:versionItems,archon:versionItems.filter((item)=>item.type==='aq'),stories:versionItems.filter((item)=>item.type==='lq'),world:versionItems.filter((item)=>item.type==='wq'),events:versionItems.filter((item)=>item.type==='eq'),milestone:REGION_MILESTONES[version] } }),[data])
+  const resetFilters = () => { setQuery('');setTypes([]);setNations([]);setVersions([]);setLimit(60) }
   return <main className="catalog-page">
     <section className="catalog-hero">
-      <div><span className="eyebrow">TEYVAT SCRIPTORIUM</span><h1>任务目录</h1></div>
+      <div><span className="eyebrow">TEYVAT SCRIPTORIUM</span><h1>{catalogView === 'cards' ? '任务目录' : '旅行历程'}</h1><p>{catalogView === 'cards' ? '按国家、章幕与版本找到完整剧情。' : '从 1.0 至今，沿主线看见提瓦特的故事如何生长。'}</p></div>
+      <div className="catalog-view-switch"><button className={catalogView==='cards'?'active':''} onClick={()=>setCatalogView('cards')}><ListTree size={17}/>任务档案</button><button className={catalogView==='journey'?'active':''} onClick={()=>setCatalogView('journey')}><MapPinned size={17}/>旅行历程</button></div>
     </section>
-    <section className="catalog-controls">
-      {guideVisible && <aside className="catalog-guide-board"><Info size={20} /><div><strong>从目录开始</strong><p>先按任务类型、地区或版本缩小范围，再打开任务阅读。进入正文后可以筛选角色、选择台词，并跨章节加入选稿池。</p></div><button onClick={() => { localStorage.setItem('teyvat:catalog-guide:v1','done'); setGuideVisible(false) }}><X size={16} />知道了</button></aside>}
-      <label className="catalog-search"><Search size={18} /><input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(60) }} placeholder="搜索任务" />{query && <button onClick={() => { setQuery(''); setLimit(60) }}><X size={15} /></button>}</label>
+    {catalogView === 'cards' && <section className="catalog-controls">
+      {guideVisible && <aside className="catalog-guide-board"><Info size={20} /><div><strong>从目录开始</strong><p>筛选项可以多选；排序在结果栏右侧。也可以切换“旅行历程”，按版本浏览剧情主干与支线。</p></div><button onClick={() => { localStorage.setItem('teyvat:catalog-guide:v1','done'); setGuideVisible(false) }}><X size={16} />知道了</button></aside>}
+      <label className="catalog-search"><Search size={18} /><input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(60) }} placeholder="搜索任务、章幕或 ID" />{query && <button onClick={() => { setQuery(''); setLimit(60) }}><X size={15} /></button>}</label>
       <div className="filter-row">
-        <SelectFilter icon={<BookOpenText size={14} />} value={type} onChange={(value) => { setType(value); setLimit(60) }} label="任务类型" options={[['all','全部类型'], ...Object.entries(TYPE_NAMES)]} />
-        <SelectFilter icon={<Snowflake size={14} />} value={nation} onChange={(value) => { setNation(value); setLimit(60) }} label="国家地区" options={[['all','全部地区'], ...Object.entries(NATION_NAMES)]} />
-        <SelectFilter icon={<Clock3 size={14} />} value={version} onChange={(value) => { setVersion(value); setLimit(60) }} label="版本" options={[['all','全部版本'], ...data.versions.map((v) => [v, `v${v}`]), ['unknown','待考证']]} />
-        <SelectFilter icon={<ChevronsUpDown size={14} />} value={sort} onChange={(v) => { setSort(v as typeof sort); setLimit(60) }} label="排序" options={[["version","按版本"],["nation","按国家"],["type","按类型"],["id","按任务 ID"]]} />
-        {(query || type !== 'all' || nation !== 'all' || version !== 'all') && <button className="reset-filters" onClick={() => { setQuery(''); setType('all'); setNation('all'); setVersion('all'); setLimit(60) }}><RotateCcw size={14} />重置</button>}
+        <MultiFilter icon={<BookOpenText size={15}/>} label="任务类型" values={types} onChange={(next)=>{setTypes(next);setLimit(60)}} options={TYPE_FILTERS.map((key)=>[key,TYPE_NAMES[key]])}/>
+        <MultiFilter icon={<Snowflake size={15}/>} label="国家地区" values={nations} onChange={(next)=>{setNations(next);setLimit(60)}} options={Object.entries(NATION_NAMES)}/>
+        <MultiFilter icon={<Clock3 size={15}/>} label="发布版本" values={versions} onChange={(next)=>{setVersions(next);setLimit(60)}} options={[...data.versions.map((v)=>[v,`v${v}`]),['unknown','待考证']]}/>
+        {(query || types.length || nations.length || versions.length) && <button className="reset-filters" onClick={resetFilters}><RotateCcw size={14} />清除筛选</button>}
       </div>
-      <div className="catalog-result-line"><span><strong>{items.length}</strong> 个任务</span><span>{sync.checking ? '检查更新中' : sync.added || sync.modified ? `新增 ${sync.added} · 修订 ${sync.modified}` : sync.checkedAt}</span></div>
-    </section>
-    <section className="catalog-grid">
+      <div className="catalog-result-line"><span><strong>{items.length}</strong> 个任务 <small>{sync.checking ? '检查更新中' : sync.added || sync.modified ? `新增 ${sync.added} · 修订 ${sync.modified}` : sync.checkedAt}</small></span><label className="catalog-sort"><SlidersHorizontal size={14}/><span>排序</span><select value={sort} onChange={(event)=>setSort(event.target.value as typeof sort)}><option value="version">按版本</option><option value="nation">按国家</option><option value="type">按类型</option><option value="id">按任务 ID</option></select><ChevronDown size={13}/></label></div>
+    </section>}
+    {catalogView === 'cards' && <section className="catalog-grid">
       {items.slice(0, limit).map((item) => <button className="catalog-card" key={item.id} onClick={() => onOpen(item)}>
         <div className="card-top"><span className={`type-badge type-${item.type}`}>{TYPE_NAMES[item.type] || '其他'}</span><span className="version-badge">{item.version ? `v${item.version}` : '—'} · #{item.id}</span></div>
         <h2>{item.title.zh}</h2><h3>{item.title.en}</h3>
+        <div className="card-context"><span>{NATION_NAMES[item.nation] || '地区待考'}</span>{item.chapter.zh && <strong>{item.chapter.zh}</strong>}<span>{item.type==='hq' ? '多结局分支' : `${item.chapterCount} Chapters`}</span></div>
+        {item.type === 'aq' && <p className="act-summary">{chapterFamily(item)}已收录 {actCounts.get(chapterFamily(item)) || 1} 幕</p>}
       </button>)}
-    </section>
-    {items.length > limit && <button className="load-more" onClick={() => setLimit((v) => v + 60)}>再显示 {Math.min(60, items.length - limit)} 个</button>}
-    {!items.length && <Empty title="没有符合条件的任务" />}
+    </section>}
+    {catalogView === 'cards' && items.length > limit && <button className="load-more" onClick={() => setLimit((v) => v + 60)}>再显示 {Math.min(60, items.length - limit)} 个</button>}
+    {catalogView === 'cards' && !items.length && <Empty title="没有符合条件的任务" />}
+    {catalogView === 'journey' && <JourneyTimeline nodes={timeline} hangouts={data.items.filter((item)=>item.type==='hq')} onOpen={onOpen}/>}
   </main>
 }
 
-function SelectFilter({ icon, value, onChange, label, options }: { icon: React.ReactNode; value: string; onChange: (v: string) => void; label: string; options: string[][] }) {
-  return <label className="select-filter">{icon}<span>{label}</span><select value={value} onChange={(e) => onChange(e.target.value)}>{options.map(([v,l]) => <option value={v} key={v}>{l}</option>)}</select><ChevronDown size={13} /></label>
+function MultiFilter({ icon,label,values,onChange,options }:{ icon:React.ReactNode;label:string;values:string[];onChange:(next:string[])=>void;options:string[][] }) {
+  const toggle=(value:string)=>onChange(values.includes(value)?values.filter((item)=>item!==value):[...values,value])
+  return <details className="multi-filter"><summary>{icon}<span>{label}</span><strong>{values.length ? `已选 ${values.length}` : '全部'}</strong><ChevronDown size={13}/></summary><div><header><b>{label}</b>{values.length>0&&<button onClick={()=>onChange([])}>清空</button>}</header>{options.map(([value,text])=><label key={value}><input type="checkbox" checked={values.includes(value)} onChange={()=>toggle(value)}/><span>{values.includes(value)&&<Check size={11}/>}</span>{text}{value==='hq'&&<small>Honey</small>}</label>)}</div></details>
+}
+
+function JourneyTimeline({ nodes,hangouts,onOpen }:{ nodes:Array<{version:string;items:CatalogItem[];archon:CatalogItem[];stories:CatalogItem[];world:CatalogItem[];events:CatalogItem[];milestone?:{nation:string;version:string;date:string;label:string}}>;hangouts:CatalogItem[];onOpen:(item:CatalogItem)=>void }) {
+  const visible=nodes.filter((node)=>node.milestone||node.archon.length||node.stories.length)
+  return <section className="journey-timeline"><header><div><span>2020 — 2026</span><h2>提瓦特剧情树</h2><p>主干为国家与魔神任务；传说任务作为人物支线，世界与活动任务收拢为版本簇。</p></div>{hangouts.length>0&&<aside><b>邀约事件图鉴</b><strong>{hangouts.length}</strong><small>当前可检索章节 · 版本日期待补全</small></aside>}</header><div className="timeline-scroll"><div className="timeline-track">{visible.map((node)=><article className={node.milestone?'timeline-node milestone':'timeline-node'} key={node.version}><div className="version-mark"><b>v{node.version}</b>{node.milestone&&<><strong>{node.milestone.label}</strong><time>{node.milestone.date}</time></>}</div><div className="timeline-branches">{node.archon.map((item)=><button className="timeline-archon" onClick={()=>onOpen(item)} key={item.id}><small>{item.chapter.zh}</small><strong>{item.title.zh}</strong><span>{item.chapterCount} Chapters</span></button>)}{node.stories.length>0&&<div className="timeline-cluster story"><b>传说任务</b><span>{node.stories.length} 项</span>{node.stories.slice(0,2).map((item)=><button onClick={()=>onOpen(item)} key={item.id}>{item.title.zh}</button>)}</div>}{(node.world.length>0||node.events.length>0)&&<div className="timeline-cluster minor"><b>同期枝叶</b><span>世界 {node.world.length} · 活动 {node.events.length}</span></div>}</div></article>)}</div></div></section>
 }
 
 function Empty({ title }: { title: string }) { return <div className="empty"><FileText size={28} /><h2>{title}</h2></div> }
@@ -251,6 +276,9 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
   const [guideOpen, setGuideOpen] = useState(() => settings.guideReader !== false && localStorage.getItem('teyvat:reader-guide:v1') !== 'done')
   const [guideStep, setGuideStep] = useState(0)
   const scriptRef = useRef<HTMLDivElement>(null)
+  const questRailRef = useRef<HTMLDivElement>(null)
+  const questButtonRefs = useRef(new Map<number, HTMLButtonElement>())
+  const [questRailEdges,setQuestRailEdges] = useState({ left:false, right:false })
   const activeLanguages = (settings.languages?.length ? settings.languages : ['CHS','EN'] as LanguageCode[]).slice(0, 3)
   const equalWidths = Array(activeLanguages.length).fill(100 / activeLanguages.length)
   const languageWidths = settings.languageWidths?.length === activeLanguages.length ? settings.languageWidths : equalWidths
@@ -266,6 +294,29 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
     setQuery('')
   }, [activeQuest.id, availableSpeakers])
   useEffect(() => { if (guideRequest > 0) { setGuideStep(0); setGuideOpen(true) } }, [guideRequest])
+  const updateQuestRailEdges = () => {
+    const rail = questRailRef.current
+    if (!rail) return
+    setQuestRailEdges({ left:rail.scrollLeft > 4, right:rail.scrollLeft + rail.clientWidth < rail.scrollWidth - 4 })
+  }
+  useEffect(() => {
+    const rail = questRailRef.current
+    const active = questButtonRefs.current.get(activeQuest.id)
+    if (!rail || !active) return
+    active.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' })
+    const timer = window.setTimeout(updateQuestRailEdges, 350)
+    const observer = new ResizeObserver(updateQuestRailEdges)
+    observer.observe(rail)
+    return () => { window.clearTimeout(timer); observer.disconnect() }
+  }, [activeQuest.id, data.quests.length])
+  const wheelQuestRail = (event:React.WheelEvent<HTMLDivElement>) => {
+    const rail = questRailRef.current
+    if (!rail || rail.scrollWidth <= rail.clientWidth) return
+    const distance = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+    if (!distance) return
+    event.preventDefault()
+    rail.scrollBy({ left:distance, behavior:'auto' })
+  }
   const speakerScenes = useMemo(() => activeQuest.scenes.map((scene) => ({ ...scene, lines: scene.lines.filter((line) => speakerKeys.has(speakerKey(line))) })), [activeQuest, speakerKeys])
   const baseScenes = useMemo(() => filterScenes(speakerScenes, sceneKeys, '', traveler), [speakerScenes, sceneKeys, traveler])
   const filteredScenes = useMemo(() => filterScenes(speakerScenes, sceneKeys, query, traveler), [speakerScenes, sceneKeys, query, traveler])
@@ -342,14 +393,21 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
     window.addEventListener('pointerup', stop)
   }
   return <main className={`reader-page font-${settings.fontFamily || 'serif'} ${selectionMode ? 'selection-active' : ''}`} style={{ '--zh-size': `${settings.zhSize}px`, '--en-size': `${settings.enSize}px`, '--reader-leading': settings.lineHeight } as React.CSSProperties}>
-    <div className="reader-topbar">
-      <button className="back-button" onClick={onBack}><ArrowLeft size={17} /><span>目录</span></button>
-      <div className="chapter-identity"><strong>{data.chapter.title.zh}</strong><span>{data.chapter.title.en}</span></div>
-      <button className="mobile-scene-button" onClick={() => setSceneOpen(true)}><Menu size={17} />场景</button>
-    </div>
-    <div className="quest-tabs" role="tablist">{data.quests.map((q) => <button className={q.id === activeQuest.id ? 'active' : ''} onClick={() => setQuestId(q.id)} key={q.id}><span>{String(q.order).padStart(2,'0')}</span><strong>{localized(q.title, activeLanguages[0])}</strong>{activeLanguages[1] && <small>{localized(q.title, activeLanguages[1])}</small>}</button>)}<button className="quest-add-act" onClick={() => onQueueChapter(data)}><Plus size={15} /><strong>整幕加入选稿池</strong><small>{data.chapter.number.zh} · 全部 {data.quests.length} 个 Chapters</small></button></div>
+    <nav className="chapter-nav-shell" aria-label="章节导航">
+      <div className="act-identity">
+        <button className="back-button" onClick={onBack} aria-label="返回任务目录"><ArrowLeft size={17} /><span>目录</span></button>
+        <div title={`${data.chapter.number.zh} · ${data.chapter.title.zh}`}><small>{data.chapter.number.zh} · {data.chapter.region.zh}</small><strong>{data.chapter.title.zh}</strong></div>
+      </div>
+      <div className={`quest-rail-shell ${questRailEdges.left ? 'can-left' : ''} ${questRailEdges.right ? 'can-right' : ''}`}>
+        <button className="quest-rail-arrow previous" disabled={!questRailEdges.left} onClick={() => questRailRef.current?.scrollBy({ left:-320, behavior:'smooth' })} aria-label="查看前面的 Chapter"><ArrowLeft size={15} /></button>
+        <div ref={questRailRef} className="quest-tabs" role="tablist" onScroll={updateQuestRailEdges} onWheel={wheelQuestRail}>{data.quests.map((q) => <button ref={(node) => { if (node) questButtonRefs.current.set(q.id,node); else questButtonRefs.current.delete(q.id) }} className={q.id === activeQuest.id ? 'active' : ''} onClick={() => setQuestId(q.id)} key={q.id}><span>{String(q.order).padStart(2,'0')}</span><strong>{localized(q.title, activeLanguages[0])}</strong>{activeLanguages[1] && <small>{localized(q.title, activeLanguages[1])}</small>}</button>)}</div>
+        <button className="quest-rail-arrow next" disabled={!questRailEdges.right} onClick={() => questRailRef.current?.scrollBy({ left:320, behavior:'smooth' })} aria-label="查看更多 Chapter"><ArrowRight size={15} /></button>
+      </div>
+      <button className="act-queue-action" onClick={() => onQueueChapter(data)} title={`将${data.chapter.number.zh}全部 ${data.quests.length} 个 Chapters 加入选稿池`}><Plus size={17} /><span>整幕加入</span><small>{data.quests.length}</small></button>
+      <button className="mobile-scene-button" onClick={() => setSceneOpen(true)}><Menu size={17} /><span>场景</span></button>
+    </nav>
     <section className="reader-intro">
-      <div><span className="eyebrow">{localized(data.chapter.number, activeLanguages[0])} · {localized(data.chapter.region, activeLanguages[0])}</span><h1>{localized(activeQuest.title, activeLanguages[0])}</h1>{activeLanguages.slice(1).map((lang) => <h2 key={lang}>{localized(activeQuest.title, lang)}</h2>)}</div>
+      <div><span className="eyebrow">{localized(data.chapter.number, activeLanguages[0])} · {localized(data.chapter.region, activeLanguages[0])}<b>{localized(data.chapter.title, activeLanguages[0])}</b></span><h1>{localized(activeQuest.title, activeLanguages[0])}</h1>{activeLanguages.slice(1).map((lang) => <h2 key={lang}>{localized(activeQuest.title, lang)}</h2>)}</div>
       <div className="intro-descriptions">{activeLanguages.map((lang) => localized(activeQuest.description, lang) && <p lang={languageInfo(lang).locale} key={lang}>{localized(activeQuest.description, lang)}</p>)}</div>
     </section>
     <div className="reader-workspace">
@@ -411,7 +469,7 @@ function DialogueRow({ line, index, optionIndex, optionTotal, mode, languages, t
 }
 
 const GUIDE_STEPS = [
-  { selector: '.quest-tabs', title: '章节目录保持在顶部', text: '横向切换不同 chapter；滚动正文时目录会压缩为一条，不会长期占用大块高度。' },
+  { selector: '.chapter-nav-shell', title: '幕标题与 Chapter 都在这里', text: '左侧始终显示当前 Act 和返回目录；中间可直接滚轮横移，选择后会自动居中；右侧可把整幕加入选稿池。' },
   { selector: '.scene-panel', mobileSelector: '.mobile-scene-button', title: '显示与定位场景', text: '勾选框只控制场景是否显示；点击场景标题会直接定位到正文。' },
   { selector: '.role-filter', title: '筛选阅读内容', text: '角色筛选只改变当前看到的台词，不会自动加入或删除选稿。' },
   { selector: '.reader-column-divider', mobileSelector: '.view-pills', title: '调整双语栏宽', text: '桌面端拖动正文中间的短手柄即可调整中外文比例，双击恢复均分；手机端可改用上下阅读。' },
@@ -520,9 +578,26 @@ function PrintStudio({ bundles, setBundles, languages, traveler = 'aether', sett
 }
 
 function BasketSheet({ bundles, setBundles, onClose, onPrint }: { bundles:PrintBundle[]; setBundles:(next:PrintBundle[]) => void; onClose:() => void; onPrint:() => void }) {
-  const [dragged,setDragged] = useState<number | null>(null)
-  const drop = (target:number) => { if (dragged === null || dragged === target) return; const next=[...bundles]; const [item]=next.splice(dragged,1); next.splice(target,0,item); setBundles(next); setDragged(null) }
-  return <Modal title="选稿池" eyebrow={`${bundles.length} SOURCES · ${bundles.reduce((n,b) => n + b.scenes.reduce((m,s) => m + s.lines.length,0),0)} LINES`} onClose={onClose}><div className="basket-sheet"><p className="basket-help"><Info size={15} />这里仅整理内容；确认顺序后再进入打印排版。按住左侧手柄可拖动任务段。</p><div className="basket-items">{bundles.map((bundle,index) => <article draggable onDragStart={() => setDragged(index)} onDragOver={(event) => event.preventDefault()} onDrop={() => drop(index)} className={dragged === index ? 'dragging' : ''} key={bundle.key}><GripVertical size={19} /><span>{String(index + 1).padStart(2,'0')}</span><div><strong>{bundle.quest.title.zh}</strong><small>{TYPE_NAMES[bundle.taskType || ''] || '剧情任务'} · {bundle.chapter.number.zh} · Chapter {bundle.quest.order} · {bundle.scenes.length} 场景 · {bundle.scenes.reduce((n,s) => n + s.lines.length,0)} 句</small></div><button onClick={() => setBundles(bundles.filter((item) => item.key !== bundle.key))} aria-label="移除"><Trash2 size={17} /></button></article>)}</div><footer><button onClick={onClose}>继续选稿</button><button className="primary-action" disabled={!bundles.length} onClick={onPrint}><Printer size={16} />进入打印排版</button></footer></div></Modal>
+  const [draggedKey,setDraggedKey] = useState<string | null>(null)
+  const itemRefs = useRef(new Map<string,HTMLElement>())
+  const previousRects = useRef(new Map<string,DOMRect>())
+  const rememberPositions = () => { previousRects.current = new Map([...itemRefs.current].map(([key,node]) => [key,node.getBoundingClientRect()])) }
+  const moveDuringDrag = (target:number) => {
+    if (!draggedKey) return
+    const source = bundles.findIndex((item) => item.key === draggedKey)
+    if (source < 0 || source === target) return
+    rememberPositions()
+    const next=[...bundles]; const [item]=next.splice(source,1); next.splice(target,0,item); setBundles(next)
+  }
+  useLayoutEffect(() => {
+    for (const [key,node] of itemRefs.current) {
+      const before = previousRects.current.get(key); if (!before) continue
+      const after = node.getBoundingClientRect(); const delta = before.top - after.top
+      if (Math.abs(delta) > 1) node.animate([{ transform:`translateY(${delta}px)` },{ transform:'translateY(0)' }],{ duration:190,easing:'cubic-bezier(.2,.8,.2,1)' })
+    }
+    previousRects.current.clear()
+  }, [bundles.map((item) => item.key).join('|')])
+  return <Modal title="选稿池" eyebrow={`${bundles.length} SOURCES · ${bundles.reduce((n,b) => n + b.scenes.reduce((m,s) => m + s.lines.length,0),0)} LINES`} onClose={onClose}><div className="basket-sheet"><p className="basket-help"><Info size={15} />这里仅整理内容；拖动时项目会实时让位，松开即确认当前顺序。</p><div className="basket-items">{bundles.map((bundle,index) => <article ref={(node) => { if (node) itemRefs.current.set(bundle.key,node); else itemRefs.current.delete(bundle.key) }} draggable onDragStart={(event) => { setDraggedKey(bundle.key); event.dataTransfer.effectAllowed='move' }} onDragEnter={() => moveDuringDrag(index)} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect='move' }} onDragEnd={() => setDraggedKey(null)} onDrop={(event) => { event.preventDefault(); setDraggedKey(null) }} className={draggedKey === bundle.key ? 'dragging' : ''} key={bundle.key}><GripVertical size={19} /><span>{String(index + 1).padStart(2,'0')}</span><div><strong>{bundle.quest.title.zh}</strong><small>{TYPE_NAMES[bundle.taskType || ''] || '剧情任务'} · {bundle.chapter.number.zh} · Chapter {bundle.quest.order} · {bundle.scenes.length} 场景 · {bundle.scenes.reduce((n,s) => n + s.lines.length,0)} 句</small></div><button onClick={() => setBundles(bundles.filter((item) => item.key !== bundle.key))} aria-label="移除"><Trash2 size={17} /></button></article>)}</div><footer><button onClick={onClose}>继续选稿</button><button className="primary-action" disabled={!bundles.length} onClick={onPrint}><Printer size={16} />进入打印排版</button></footer></div></Modal>
 }
 
 function PrintPreview({ bundles, languages, traveler, settings, setSettings, printedAt }: { bundles: PrintBundle[]; languages: LanguageCode[]; traveler: Traveler; settings: PrintSettings; setSettings: (settings: PrintSettings) => void; printedAt: string }) {
@@ -625,7 +700,7 @@ function PrintBandEditor({ bands, onChange }: { bands: PrintSettings['bands']; o
   </PrintGroup>
 }
 
-function Modal({ title, eyebrow, onClose, children, wide = false }: { title: string; eyebrow: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) { return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true"><header><div><span>{eyebrow}</span><h2>{title}</h2></div><button onClick={onClose}><X size={20} /></button></header>{children}</section></div> }
+function Modal({ title, eyebrow, onClose, children, wide = false }: { title: string; eyebrow: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) { return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true"><header><div><span>{eyebrow}</span><h2>{title}</h2></div><button onClick={onClose}><X size={20} /></button></header>{eyebrow === 'CHANGELOG' && <div className="changelog changelog-latest"><article><span>v0.6.0 · 2026-08-12</span><h3>旅行历程与章幕导航</h3><ul><li>目录补充国家、章幕、Chapter 数量与同章幕数</li><li>类型、国家和版本支持多选，排序独立显示</li><li>新增邀约事件分类与横向旅行历程剧情树</li><li>固定导航展示 Act，并支持 Chapter 自动居中和普通滚轮横移</li><li>选稿池拖动时实时换位并平滑过渡</li></ul></article></div>}{children}</section></div> }
 function SettingRow({ title, children }: { title: string; children: React.ReactNode }) { return <div className="setting-row"><div><strong>{title}</strong></div>{children}</div> }
 function Segment({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[][] }) { return <div className="segment">{options.map(([v,l]) => <button className={value === v ? 'active' : ''} onClick={() => onChange(v)} key={v}>{l}</button>)}</div> }
 function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) { return <button className={checked ? 'switch on' : 'switch'} onClick={() => onChange(!checked)}><span /></button> }
@@ -668,6 +743,7 @@ export default function App() {
     return () => removeEventListener('popstate', onPopState)
   }, [])
   const openItem = async (item: CatalogItem) => {
+    if (item.sourceUrl) { window.open(item.sourceUrl,'_blank','noopener,noreferrer'); setNotice('邀约正文由 Honey Hunter 提供，已在新标签页打开'); return }
     if (await loadChapter(item.id, settings.languages || ['CHS','EN'])) {
       history.pushState({ teyvat: true, page: 'reader', fromCatalog: true }, '', `?chapter=${item.id}`)
       setPage('reader')

@@ -28,7 +28,9 @@ npm run preview
 npm run data:update
 ```
 
-目录与正文从 Project Amber / Yatta 的结构化接口读取，并按游戏内部 ID 合并。正文支持 15 种游戏语言，每次只加载当前选择的 1–3 种语言。版本元数据优先采用 Yatta 更新记录；其未覆盖的早期任务由 Genshin Impact Wiki 的 `Released in Version` 分类补足。地区元数据同样优先采用 Wiki 的任务分类；只能由标题识别的条目会标记为推断，无法确认的条目显示“待考证”。Wiki 查询结果缓存于 `public/data/wiki-metadata.json`，外站短暂不可用不会破坏已有目录。
+目录与正文从 Project Amber / Yatta 的结构化接口读取，并按游戏内部 ID 合并；邀约事件从 Honey Hunter 的独立目录生成可追溯快照。正文支持 15 种游戏语言，每次只加载当前选择的 1–3 种语言。版本元数据优先采用 Yatta 更新记录；其未覆盖的早期任务由 Genshin Impact Wiki 的 `Released in Version` 分类补足。地区元数据同样优先采用 Wiki 的任务分类；只能由标题识别的条目会标记为推断，无法确认的条目显示“待考证”。Wiki 查询结果缓存于 `public/data/wiki-metadata.json`，外站短暂不可用不会破坏已有目录。
+
+目录提供任务档案与旅行历程两种视图。任务类型、国家和版本均可多选；旅行历程以国家首发版本和魔神任务为主干，将传说、世界与活动任务折叠为可读支线。邀约目录仍在逐步补齐版本日期，因此页面会明确标注已收录数量，不把未知时间强行放入版本轴。
 
 ## 打印与 PDF
 

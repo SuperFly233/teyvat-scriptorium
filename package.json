@@ -1,7 +1,7 @@
 {
   "name": "teyvat-scriptorium",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,11 +9,14 @@
     "preview": "vite preview",
     "data:fetch": "node scripts/fetch-quest.mjs 1700",
     "data:catalog": "node --use-env-proxy scripts/fetch-catalog.mjs",
-    "data:update": "npm run data:catalog && npm run data:fetch",
+    "data:hangouts": "node --use-env-proxy scripts/fetch-hangouts.mjs",
+    "data:update": "npm run data:catalog && npm run data:hangouts && npm run data:fetch",
     "test": "vitest run",
     "test:watch": "vitest",
     "qa:print": "npm run build && node scripts/qa-print.mjs",
     "qa:dialogue": "npm run build && node scripts/qa-dialogue.mjs",
+    "qa:navigation": "npm run build && node scripts/qa-navigation.mjs",
+    "qa:catalog": "npm run build && node scripts/qa-catalog.mjs",
     "publish:pages": "npm test && npm run build && wrangler pages deploy ./dist --project-name teyvat-scriptorium --branch main",
     "publish": "git push origin main && npm run publish:pages"
   },

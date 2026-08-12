@@ -62,6 +62,7 @@ export type CatalogItem = {
   hidden: boolean
   unreleased: boolean
   languages: { zh: boolean; en: boolean }
+  sourceUrl?: string
 }
 
 export type CatalogData = {
