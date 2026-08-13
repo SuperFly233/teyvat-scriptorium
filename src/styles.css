@@ -6425,7 +6425,8 @@ button[aria-label*="Post" i],
   background:
     radial-gradient(circle at 18% 8%, rgb(63 105 96 / 38%), transparent 28%),
     linear-gradient(145deg, #13231f, #1d3832 55%, #12211e);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 .journey-timeline > header {
   max-width: 1260px;
@@ -7247,6 +7248,9 @@ button[aria-label*="Post" i],
 }
 .timeline-controls {
   position: fixed !important;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 .theme-setting-switch {
   width: max-content;
@@ -7303,6 +7307,9 @@ button[aria-label*="Post" i],
 }
 .series-navigation {
   min-height: 36px;
+  position: sticky;
+  top: 126px;
+  z-index: 31;
   padding: 0 max(16px, calc((100vw - 1380px) / 2));
   display: flex;
   justify-content: center;
@@ -7334,6 +7341,19 @@ button[aria-label*="Post" i],
 .series-navigation button:disabled {
   opacity: 0.35;
   cursor: default;
+}
+.reader-page.has-series-nav .reader-toolbar {
+  top: 162px;
+}
+.reader-page.has-series-nav .scene-panel {
+  top: 162px;
+  height: calc(100vh - 162px);
+}
+.reader-page.has-series-nav .scene-block {
+  scroll-margin-top: 232px;
+}
+.reader-page.has-series-nav .reader-column-divider svg {
+  top: 240px;
 }
 .print-context-summary {
   margin-bottom: 15px;
@@ -7432,7 +7452,15 @@ button[aria-label*="Post" i],
 @media screen and (max-width: 620px) {
   .series-navigation {
     min-height: 34px;
+    top: 116px;
     padding: 0 8px;
+  }
+  .reader-page.has-series-nav .reader-toolbar {
+    top: auto;
+  }
+  .reader-page.has-series-nav .scene-panel {
+    top: 0;
+    height: 100vh;
   }
   .series-navigation button {
     width: 50%;
@@ -7530,7 +7558,6 @@ button[aria-label*="Post" i],
 @keyframes page-enter {
   from {
     opacity: 0.45;
-    transform: translateY(5px);
   }
 }
 @keyframes modal-fade-in {

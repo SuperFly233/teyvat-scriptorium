@@ -32,6 +32,7 @@ export type DialogueLine = {
   nextNodeIds?: string[];
   branchGroupId?: string;
   branchIndex?: number;
+  branchDepth?: number;
   branchTotal?: number;
   branchRole?: "prompt" | "option" | "response";
   branchFlow?:

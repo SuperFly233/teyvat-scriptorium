@@ -208,7 +208,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.8.5";
+const APP_VERSION = "v0.8.6";
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
   "mondstadt",
@@ -323,14 +323,40 @@ const seriesKey = (item: CatalogItem) => {
     return `wq:${item.imageTitle.zh}`;
   return "";
 };
-const seriesOrder = (item: CatalogItem) => {
-  const explicit = narrativeOrder(item);
-  if (explicit >= 0) return explicit;
-  const numeric = chineseNumber(
-    item.chapter.zh.match(/第([^章幕 ]+)[章幕]/)?.[1] || "",
-  );
-  return numeric ? numeric * 100 : 100000 + item.id;
+const versionOrder = (item: CatalogItem) => {
+  const value = Number.parseFloat(item.version || "");
+  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
 };
+const structuralSeriesOrder = (item: CatalogItem) => {
+  const chapterText = `${item.chapter.zh} ${item.chapter.en}`;
+  const explicit = narrativeOrder(item);
+  if (explicit >= 0 && !/幕间|Interlude/i.test(chapterText)) return explicit;
+  const part = `${item.title.zh} ${item.title.en}`.match(
+    /(?:其|第|Part\s+)([一二三四五六七八九十\d]+|[IVXLCDM]+)/i,
+  )?.[1];
+  if (part) {
+    if (/^[IVXLCDM]+$/i.test(part)) {
+      const values: Record<string, number> = {
+        I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000,
+      };
+      return [...part.toUpperCase()].reduce(
+        (total, char, index, chars) =>
+          total +
+          ((values[char] || 0) < (values[chars[index + 1]] || 0)
+            ? -(values[char] || 0)
+            : values[char] || 0),
+        0,
+      );
+    }
+    const numeric = chineseNumber(part);
+    if (numeric) return numeric;
+  }
+  return Number.MAX_SAFE_INTEGER;
+};
+const compareSeriesItems = (a: CatalogItem, b: CatalogItem) =>
+  versionOrder(a) - versionOrder(b) ||
+  structuralSeriesOrder(a) - structuralSeriesOrder(b) ||
+  a.id - b.id;
 
 function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(() => {
@@ -1931,7 +1957,7 @@ function Reader({
   };
   return (
     <main
-      className={`reader-page font-${settings.fontFamily || "serif"} ${selectionMode ? "selection-active" : ""}`}
+      className={`reader-page font-${settings.fontFamily || "serif"} ${selectionMode ? "selection-active" : ""} ${seriesNav?.previous || seriesNav?.next ? "has-series-nav" : ""}`}
       style={
         {
           "--zh-size": `${settings.zhSize}px`,
@@ -2624,9 +2650,14 @@ function SceneBlock({
           )}
           <div className="branch-paths">
             {Array.from({ length: total }, (_, branchIndex) => {
-              const path = group.filter(
-                (item) => item.branchIndex === branchIndex,
-              );
+              const path = group
+                .filter((item) => item.branchIndex === branchIndex)
+                .sort(
+                  (a, b) =>
+                    (a.branchDepth ?? Number.MAX_SAFE_INTEGER) -
+                      (b.branchDepth ?? Number.MAX_SAFE_INTEGER) ||
+                    scene.lines.indexOf(a) - scene.lines.indexOf(b),
+                );
               return (
                 <section
                   className={`branch-path branch-tone-${branchIndex % 4}`}
@@ -4652,6 +4683,17 @@ function Modal({
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
             <article>
+              <span>v0.8.6 · 2026-08-14</span>
+              <h3>分支路径、固定操作层与系列顺序回归修复</h3>
+              <ul>
+                <li>分支内部按 Honey 图距离排序，避免源码顺序打乱选项与专属回应。</li>
+                <li>剧情树控制条、最新版本按钮、选句操作条及选稿池重新固定于视口底部。</li>
+                <li>更新日志只打开弹窗，不再改变详情页、URL 或浏览器历史。</li>
+                <li>系列顺序改用发布版本、章节结构与任务 ID 的分层规则，正确处理第五章幕间。</li>
+                <li>自动数据源仅请求一次 Honey 图，减少多语言详情首次载入等待。</li>
+              </ul>
+            </article>
+            <article>
               <span>v0.8.5 · 2026-08-13</span>
               <h3>Honey 分支图、栏宽拖动与打印密度修复</h3>
               <ul>
@@ -5158,7 +5200,7 @@ export default function App() {
               !item.hidden &&
               !item.unreleased,
           )
-          .sort((a, b) => seriesOrder(a) - seriesOrder(b))
+          .sort(compareSeriesItems)
       : [];
   const currentSeriesIndex =
     currentSeries?.findIndex((item) => item.id === currentCatalogItem?.id) ??
@@ -5211,10 +5253,7 @@ export default function App() {
         onTheme={(theme) => setSettings({ ...settings, theme })}
         onCatalog={goCatalog}
         onSettings={() => setSettingsOpen(true)}
-        onChangelog={() => {
-          goCatalog();
-          setChangelogOpen(true);
-        }}
+        onChangelog={() => setChangelogOpen(true)}
       />
       {page === "catalog" && catalog && (
         <Catalog

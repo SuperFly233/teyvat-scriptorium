@@ -4,6 +4,7 @@ type BranchMark = Pick<
   DialogueLine,
   | "branchGroupId"
   | "branchIndex"
+  | "branchDepth"
   | "branchTotal"
   | "branchRole"
   | "branchFlow"
@@ -115,6 +116,7 @@ export function enrichBranches(lines: DialogueLine[]): DialogueLine[] {
       marks.set(prompt.nodeId, {
         branchGroupId: groupId,
         branchIndex: -1,
+        branchDepth: -1,
         branchTotal: targets.length,
         branchRole: "prompt",
         branchFlow: flow,
@@ -125,6 +127,7 @@ export function enrichBranches(lines: DialogueLine[]): DialogueLine[] {
         marks.set(id, {
           branchGroupId: groupId,
           branchIndex,
+          branchDepth: reach[branchIndex].get(id) ?? 0,
           branchTotal: targets.length,
           branchRole: id === targets[branchIndex] ? "option" : "response",
           branchFlow: flow,

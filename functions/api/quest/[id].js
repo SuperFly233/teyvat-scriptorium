@@ -167,7 +167,7 @@ export async function onRequestGet(context) {
   const source = ['auto','yatta','honey'].includes(requestedSource) ? requestedSource : 'auto'
   try {
     const cache = caches.default
-    const cacheKey = new Request(`${url.origin}${url.pathname}?langs=${languages.join(',')}&source=${source}&graph=2`, context.request)
+    const cacheKey = new Request(`${url.origin}${url.pathname}?langs=${languages.join(',')}&source=${source}&graph=3`, context.request)
     const hit = await cache.match(cacheKey)
     if (hit) return hit
     const payloads = await Promise.all(languages.map((lang) => fetchLanguage(lang, id)))
@@ -177,7 +177,12 @@ export async function onRequestGet(context) {
     data.source.strategy = source
     let headerSource = 'Project-Amber'
     if (source !== 'yatta') {
-      const honey = await applyHoneyGraph(data, languages)
+      // In automatic mode Honey is used for its graph, which is language-independent.
+      // Fetching every display language doubled/tripled first-open latency without adding edges.
+      const honeyLanguages = source === 'honey'
+        ? languages
+        : [languages.includes('CHS') ? 'CHS' : languages[0]]
+      const honey = await applyHoneyGraph(data, honeyLanguages)
       if (honey.matched) {
         data.source.primary = source === 'honey' ? 'Honey Hunter World（Yatta 补全元数据）' : 'Project Amber / Yatta + Honey Hunter World'
         data.source.notice = `Honey 已匹配 ${honey.matched} 个语言节点；章节目录、标题及 Honey 未覆盖的内容由 Yatta 补全。`
