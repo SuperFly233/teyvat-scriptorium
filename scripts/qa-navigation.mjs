@@ -11,6 +11,9 @@ const browser=await chromium.launch({headless:true}); const page=await browser.n
 await page.addInitScript(()=>localStorage.setItem('teyvat:settings:v5',JSON.stringify({guideReader:false,guideCatalog:false,guideScenes:false})))
 await page.goto(`http://127.0.0.1:${port}/?chapter=1700`,{waitUntil:'networkidle'})
 
+const series=await page.locator('.series-navigation').evaluate((node)=>{const box=node.getBoundingClientRect();const chapter=document.querySelector('.chapter-nav-shell').getBoundingClientRect();const intro=document.querySelector('.reader-intro').getBoundingClientRect();const buttons=Array.from(node.querySelectorAll('button'));return{box:box.toJSON(),chapter:chapter.toJSON(),intro: intro.toJSON(),labels:buttons.map(button=>button.textContent.trim()),disabled:buttons.map(button=>button.disabled),noChapterOverlap:box.top>=chapter.bottom-1,noIntroOverlap:box.bottom<=intro.top+1}})
+await page.screenshot({path:'artifacts/series-navigation-desktop.jpg',type:'jpeg',quality:82,fullPage:false})
+
 const tabs=page.locator('.quest-tabs [role="tab"],.quest-tabs > button')
 await tabs.last().click(); await page.waitForTimeout(450)
 const afterSelect=await page.locator('.quest-tabs').evaluate((rail)=>{ const active=rail.querySelector('.active').getBoundingClientRect(); const box=rail.getBoundingClientRect(); return {scrollLeft:rail.scrollLeft,activeVisible:active.left>=box.left-1&&active.right<=box.right+1} })
@@ -28,7 +31,7 @@ const liveOrder=await page.locator('.basket-items article strong').allTextConten
 await items.nth(2).dispatchEvent('dragend',{dataTransfer:transfer})
 await page.screenshot({path:'artifacts/basket-live-sort.jpg',type:'jpeg',quality:80,fullPage:false})
 
-await page.getByRole('button',{name:'继续选稿'}).click(); await page.setViewportSize({width:390,height:844}); await page.waitForTimeout(120); await page.screenshot({path:'artifacts/navigation-mobile.jpg',type:'jpeg',quality:80,fullPage:false})
-const mobile=await page.evaluate(()=>({noOverflow:document.scrollingElement.scrollWidth<=document.scrollingElement.clientWidth,nav:document.querySelector('.chapter-nav-shell').getBoundingClientRect().toJSON(),actTitle:document.querySelector('.act-identity strong')?.textContent,queueVisible:Boolean(document.querySelector('.act-queue-action'))}))
-console.log(JSON.stringify({afterSelect,afterWheel,sticky,drag:{firstBefore,thirdBefore,liveOrder,activeAnimations,reorderedBeforeDrop:liveOrder[2]===firstBefore},mobile}))
+await page.getByRole('button',{name:'继续选稿'}).click(); await page.setViewportSize({width:390,height:844}); await page.evaluate(()=>scrollTo(0,0)); await page.waitForTimeout(120); await page.screenshot({path:'artifacts/navigation-mobile.jpg',type:'jpeg',quality:80,fullPage:false})
+const mobile=await page.evaluate(()=>{const series=document.querySelector('.series-navigation')?.getBoundingClientRect();const chapter=document.querySelector('.chapter-nav-shell').getBoundingClientRect();return{noOverflow:document.scrollingElement.scrollWidth<=document.scrollingElement.clientWidth,nav:chapter.toJSON(),series:series?.toJSON(),seriesClear:Boolean(series&&series.top>=chapter.bottom-1),actTitle:document.querySelector('.act-identity strong')?.textContent,queueVisible:Boolean(document.querySelector('.act-queue-action'))}})
+console.log(JSON.stringify({series,afterSelect,afterWheel,sticky,drag:{firstBefore,thirdBefore,liveOrder,activeAnimations,reorderedBeforeDrop:liveOrder[2]===firstBefore},mobile}))
 await browser.close(); server.close()

@@ -7173,22 +7173,19 @@ button[aria-label*="Post" i],
   white-space: nowrap;
 }
 .series-navigation {
-  position: absolute;
-  left: 50%;
-  bottom: -34px;
-  z-index: 12;
-  transform: translateX(-50%);
-  height: 34px;
-  display: grid;
-  grid-template-columns: minmax(120px, 220px) auto minmax(120px, 220px);
+  min-height: 36px;
+  padding: 0 max(16px, calc((100vw - 1380px) / 2));
+  display: flex;
+  justify-content: center;
   align-items: center;
-  border: 1px solid var(--line);
+  gap: 1px;
+  border-bottom: 1px solid var(--line);
   background: var(--paper-2);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 10%);
 }
 .series-navigation button {
-  height: 32px;
-  padding: 0 9px;
+  width: min(280px, 32vw);
+  height: 35px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -7205,13 +7202,9 @@ button[aria-label*="Post" i],
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.series-navigation small {
-  padding: 0 8px;
-  color: var(--muted);
-  white-space: nowrap;
-}
 .series-navigation button:disabled {
   opacity: 0.35;
+  cursor: default;
 }
 .print-context-summary {
   margin-bottom: 15px;
@@ -7309,13 +7302,14 @@ button[aria-label*="Post" i],
 }
 @media screen and (max-width: 620px) {
   .series-navigation {
-    left: 12px;
-    right: 12px;
-    transform: none;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-height: 34px;
+    padding: 0 8px;
   }
-  .series-navigation > small {
-    display: none;
+  .series-navigation button {
+    width: 50%;
+    height: 33px;
+    padding-inline: 7px;
+    font-size: 11px;
   }
 }
 @keyframes timeline-reveal {

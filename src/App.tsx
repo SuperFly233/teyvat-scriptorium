@@ -206,7 +206,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.8.1";
+const APP_VERSION = "v0.8.2";
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
   "mondstadt",
@@ -1980,27 +1980,6 @@ function Reader({
           <span>整幕加入</span>
           <small>{data.quests.length}</small>
         </button>
-        {(seriesNav?.previous || seriesNav?.next) && (
-          <div className="series-navigation" aria-label="系列任务前后切换">
-            <button
-              disabled={!seriesNav.previous}
-              onClick={() =>
-                seriesNav.previous && seriesNav.open(seriesNav.previous)
-              }
-            >
-              <ArrowLeft size={14} />
-              <span>{seriesNav.previous?.title.zh || "已经是开头"}</span>
-            </button>
-            <small>同系列</small>
-            <button
-              disabled={!seriesNav.next}
-              onClick={() => seriesNav.next && seriesNav.open(seriesNav.next)}
-            >
-              <span>{seriesNav.next?.title.zh || "已经是结尾"}</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-        )}
         <button
           className="mobile-scene-button"
           onClick={() => setSceneOpen(true)}
@@ -2009,6 +1988,36 @@ function Reader({
           <span>场景</span>
         </button>
       </nav>
+      {(seriesNav?.previous || seriesNav?.next) && (
+        <nav className="series-navigation" aria-label="系列任务前后切换">
+          <button
+            aria-label={
+              seriesNav.previous
+                ? `上一项：${seriesNav.previous.title.zh}`
+                : "没有上一项"
+            }
+            disabled={!seriesNav.previous}
+            onClick={() =>
+              seriesNav.previous && seriesNav.open(seriesNav.previous)
+            }
+          >
+            <ArrowLeft size={15} />
+            {seriesNav.previous && <span>{seriesNav.previous.title.zh}</span>}
+          </button>
+          <button
+            aria-label={
+              seriesNav.next
+                ? `下一项：${seriesNav.next.title.zh}`
+                : "没有下一项"
+            }
+            disabled={!seriesNav.next}
+            onClick={() => seriesNav.next && seriesNav.open(seriesNav.next)}
+          >
+            {seriesNav.next && <span>{seriesNav.next.title.zh}</span>}
+            <ArrowRight size={15} />
+          </button>
+        </nav>
+      )}
       <section className="reader-intro">
         <div>
           <span className="eyebrow">
@@ -4487,20 +4496,17 @@ function Modal({
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
             <article>
-              <span>v0.8.1 · 2026-08-13</span>
-              <h3>分页一致、完整归属与分支校验</h3>
+              <span>v0.8.2 · 2026-08-13</span>
+              <h3>轻量系列导航</h3>
               <ul>
                 <li>
-                  修复超紧凑预览与实际 PDF 页数不一致的问题，预览与矢量输出统一使用同一套分页规则
+                  系列任务前后切换移出顶部悬浮层，固定导航、切换条和阅读工具栏不再互相覆盖
                 </li>
                 <li>
-                  跨任务打印为每一项补齐国家、Act、Chapter 与 Episode 的中英文分行归属信息
+                  去除“同系列”及“已经是开头/结尾”等重复文案，边界状态仅以灰色禁用箭头表达
                 </li>
                 <li>
-                  单 Chapter 标题纳入序号，三选项、三种差异回应及共同后续加入真实数据回归校验
-                </li>
-                <li>
-                  打印入口统一命名为“打印排版”，去除已完成选稿后仍出现的旧“选稿台”含义
+                  桌面和手机统一采用紧凑左右布局，并补充不重叠与无横向溢出的浏览器回归检查
                 </li>
               </ul>
             </article>
@@ -4646,6 +4652,15 @@ function Changelog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="更新日志" eyebrow="CHANGELOG" onClose={onClose}>
       <div className="changelog">
+        <article>
+          <span>v0.8.1 · 2026-08-13</span>
+          <h3>分页一致、完整归属与分支校验</h3>
+          <ul>
+            <li>修复超紧凑预览与实际 PDF 页数不一致，统一预览与矢量输出的分页规则</li>
+            <li>跨任务打印补齐国家、Act、Chapter 与 Episode 的中英文分行归属信息</li>
+            <li>三选项、三种差异回应及共同后续加入真实数据回归校验</li>
+          </ul>
+        </article>
         <article>
           <span>v0.8.0 · 2026-08-13</span>
           <h3>完整层级、系列导航与可靠排印</h3>
