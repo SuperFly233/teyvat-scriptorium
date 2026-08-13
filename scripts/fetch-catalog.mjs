@@ -142,7 +142,7 @@ const catalog = {
   source: 'Project Amber / Yatta',
   versionCoverage: {
     exactFrom: '1.0',
-    note: '版本优先取 Yatta 更新记录；早期条目由 Genshin Impact Wiki 的发布版本分类补足。未确认项会明确标为“待考证”。',
+    note: '版本优先取 Yatta 更新记录；早期条目由 Genshin Impact Wiki 的发布版本分类补足。上游目录未提供版本字段的条目会明确标为“版本数据缺失”。',
   },
   versions: [...new Set(items.map((item) => item.version).filter(Boolean))].sort((a, b) => Number(b.replace('.', '')) - Number(a.replace('.', ''))),
   counts,

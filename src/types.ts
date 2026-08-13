@@ -14,6 +14,8 @@ export type DialogueLine = {
   branchIndex?: number
   branchTotal?: number
   branchRole?: 'option' | 'response'
+  branchFlow?: 'convergent' | 'divergent' | 'loop' | 'independent' | 'unresolved'
+  branchMergeNodeId?: string
 }
 
 export type Scene = {

@@ -18,6 +18,8 @@
     "qa:navigation": "npm run build && node scripts/qa-navigation.mjs",
     "qa:catalog": "npm run build && node scripts/qa-catalog.mjs",
     "qa:hangout": "node --use-env-proxy scripts/qa-hangout.mjs",
+    "qa:branches": "node scripts/qa-branches.mjs",
+    "qa:reader-layout": "node scripts/qa-reader-layout.mjs",
     "publish:pages": "npm test && npm run build && wrangler pages deploy ./dist --project-name teyvat-scriptorium --branch main",
     "publish": "git push origin main && npm run publish:pages"
   },
