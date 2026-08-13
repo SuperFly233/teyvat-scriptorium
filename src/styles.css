@@ -7607,15 +7607,17 @@ button[aria-label*="Post" i],
     transition: none !important;
   }
 }
-.branch-prompt {
+.branch-prompt-card {
   margin: 0 14px 10px;
   border: 1px solid color-mix(in srgb, var(--red) 28%, var(--line));
   background: color-mix(in srgb, var(--paper-2) 86%, var(--red));
 }
-.branch-prompt .dialogue-row {
+.branch-prompt-card .dialogue-row {
+  width: 100%;
+  margin-left: 0;
   border-bottom: 0;
 }
-.branch-prompt::before {
+.branch-prompt-card::before {
   content: "触发问题";
   padding: 7px 12px 0;
   display: block;

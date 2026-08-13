@@ -208,7 +208,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.8.6";
+const APP_VERSION = "v0.8.7";
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
   "mondstadt",
@@ -2632,7 +2632,7 @@ function SceneBlock({
             </div>
           </header>
           {prompt && (
-            <div className="branch-prompt">
+            <div className="branch-prompt-card">
               <DialogueRow
                 line={prompt}
                 index={start}
@@ -4682,6 +4682,15 @@ function Modal({
         </header>
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
+            <article>
+              <span>v0.8.7 · 2026-08-14</span>
+              <h3>差异分支触发问题排版修复</h3>
+              <ul>
+                <li>拆分触发卡片与分支节点的同名样式，消除重复网格导致的竖排文字、逐词换行与大片空白。</li>
+                <li>触发问题恢复完整三语栏宽；手机端沿用上下阅读且不产生横向溢出。</li>
+                <li>新增差异分支专用桌面与手机尺寸断言，防止同类布局回归。</li>
+              </ul>
+            </article>
             <article>
               <span>v0.8.6 · 2026-08-14</span>
               <h3>分支路径、固定操作层与系列顺序回归修复</h3>
