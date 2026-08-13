@@ -29,6 +29,7 @@ export type DialogueLine = {
   text: LanguagePair;
   sourceType?: string;
   nextNodeId?: string;
+  nextNodeIds?: string[];
   branchGroupId?: string;
   branchIndex?: number;
   branchTotal?: number;

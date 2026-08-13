@@ -81,7 +81,10 @@ async function applyHoneyGraph(data, languages) {
         if (lang === 'CHS') line.speaker.zh = role
         if (lang === 'EN') line.speaker.en = role
       }
-      if (!line.nodeId.endsWith('-player') && Array.isArray(node.next) && node.next.length === 1) line.nextNodeId = String(node.next[0])
+      if (!line.nodeId.endsWith('-player') && Array.isArray(node.next)) {
+        line.nextNodeIds = node.next.map(String)
+        line.nextNodeId = line.nextNodeIds[0] || ''
+      }
       matched += 1
     })
   })))
@@ -164,7 +167,7 @@ export async function onRequestGet(context) {
   const source = ['auto','yatta','honey'].includes(requestedSource) ? requestedSource : 'auto'
   try {
     const cache = caches.default
-    const cacheKey = new Request(`${url.origin}${url.pathname}?langs=${languages.join(',')}&source=${source}`, context.request)
+    const cacheKey = new Request(`${url.origin}${url.pathname}?langs=${languages.join(',')}&source=${source}&graph=2`, context.request)
     const hit = await cache.match(cacheKey)
     if (hit) return hit
     const payloads = await Promise.all(languages.map((lang) => fetchLanguage(lang, id)))

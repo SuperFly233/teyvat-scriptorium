@@ -8,6 +8,11 @@ await mkdir(join(process.cwd(), 'artifacts'), { recursive:true })
 const server = createServer(async (request, response) => {
   try {
     const pathname = new URL(request.url, 'http://local').pathname
+    if (pathname.startsWith('/api/quest/1700')) {
+      response.writeHead(200, { 'content-type':'application/json', 'cache-control':'no-store' })
+      response.end(await readFile(join(process.cwd(), 'public/data/quest-1700.json')))
+      return
+    }
     const requested = pathname === '/' ? 'index.html' : pathname.slice(1)
     const path = join(process.cwd(), 'dist', requested)
     const body = await readFile(path).catch(() => readFile(join(process.cwd(), 'dist', 'index.html')))
@@ -34,8 +39,20 @@ if (!await page.locator('.selection-select-all').count()) {
 await page.locator('.selection-select-all').click()
 await page.locator('.queue-inline').click()
 await page.locator('.basket-dock .basket-print').click()
-await page.getByRole('button', { name: /超紧凑/ }).click()
+await page.locator('.density-presets button').nth(1).click()
 await page.waitForTimeout(300)
+
+const printColumnsBefore = await page.locator('.preview-paper .print-line').first().evaluate((element) => getComputedStyle(element).gridTemplateColumns)
+const printDividerBox = await page.locator('.preview-column-divider').first().boundingBox()
+if (printDividerBox) {
+  const x = printDividerBox.x + printDividerBox.width / 2
+  const y = printDividerBox.y + printDividerBox.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + 80, y, { steps: 12 })
+  await page.mouse.up()
+}
+const printColumnsAfter = await page.locator('.preview-paper .print-line').first().evaluate((element) => getComputedStyle(element).gridTemplateColumns)
 
 const desktop = await page.evaluate(() => {
   const modal = document.querySelector('.modal.wide')?.getBoundingClientRect()
@@ -49,6 +66,7 @@ const desktop = await page.evaluate(() => {
     noPageHorizontalOverflow: document.scrollingElement.scrollWidth <= document.scrollingElement.clientWidth,
     previewPages: document.querySelector('.preview-toolbar strong')?.textContent?.trim(),
     marginStatus: document.querySelector('.margin-safe,.margin-warning')?.textContent?.trim(),
+    density: document.querySelector('.density-presets button.active')?.textContent?.trim(),
   }
 })
 await page.screenshot({ path: 'artifacts/print-studio-desktop.jpg', type:'jpeg', quality:72, fullPage: false })
@@ -69,6 +87,6 @@ const mobile = await page.evaluate(() => {
   }
 })
 await page.screenshot({ path: 'artifacts/print-studio-mobile.jpg', type:'jpeg', quality:76, fullPage: false })
-console.log(JSON.stringify({ desktop, mobile }))
+console.log(JSON.stringify({ desktop, mobile, printColumnsBefore, printColumnsAfter, printDividerChanged: printColumnsBefore !== printColumnsAfter }))
 await browser.close()
 server.close()

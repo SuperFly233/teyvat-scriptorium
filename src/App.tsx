@@ -208,7 +208,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.8.4";
+const APP_VERSION = "v0.8.5";
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
   "mondstadt",
@@ -518,7 +518,7 @@ function useData(dataSource: AppSettings["dataSource"] = "auto") {
     try {
       const languageKey = languages.slice(0, 3).join(",");
       const cached = sessionStorage.getItem(
-        `chapter:${id}:${languageKey}:${source}`,
+        `chapter:v2:${id}:${languageKey}:${source}`,
       );
       if (cached) {
         setChapter(normalizeChapterData(JSON.parse(cached)));
@@ -572,7 +572,7 @@ function useData(dataSource: AppSettings["dataSource"] = "auto") {
       setChapter(data);
       try {
         sessionStorage.setItem(
-          `chapter:${id}:${languageKey}:${source}`,
+          `chapter:v2:${id}:${languageKey}:${source}`,
           JSON.stringify(data),
         );
       } catch {
@@ -2549,17 +2549,27 @@ function SceneBlock({
     () => showGuide && sessionStorage.getItem(guideKey) !== "done",
   );
   const blocks: React.ReactNode[] = [];
+  const renderedBranchGroups = new Set<string>();
+  const consumedBranchLines = new Set<string>();
   let index = 0;
   while (index < scene.lines.length) {
     const line = scene.lines[index];
+    if (consumedBranchLines.has(line.key)) {
+      index++;
+      continue;
+    }
     if (line.branchGroupId) {
       const start = index;
-      const group: DialogueLine[] = [];
-      while (
-        index < scene.lines.length &&
-        scene.lines[index].branchGroupId === line.branchGroupId
-      )
-        group.push(scene.lines[index++]);
+      if (renderedBranchGroups.has(line.branchGroupId)) {
+        index++;
+        continue;
+      }
+      renderedBranchGroups.add(line.branchGroupId);
+      const group = scene.lines.filter(
+        (item) => item.branchGroupId === line.branchGroupId,
+      );
+      group.forEach((item) => consumedBranchLines.add(item.key));
+      index++;
       const total =
         line.branchTotal || new Set(group.map((item) => item.branchIndex)).size;
       const flow =
@@ -2660,7 +2670,7 @@ function SceneBlock({
           </div>
         </section>,
       );
-      if (line.branchMergeNodeId && index < scene.lines.length)
+      if (line.branchMergeNodeId)
         blocks.push(
           <div
             className="common-story-marker"
@@ -3420,15 +3430,25 @@ function PrintStudio({
               />
             </PrintGroup>
             <PrintGroup title="密度预设">
-              <Segment
-                value={settings.density}
-                onChange={(v) => applyDensity(v as PrintSettings["density"])}
-                options={[
-                  ["comfortable", "一般 · 11pt"],
-                  ["compact", "紧凑 · 9pt"],
-                  ["ultra", "超紧凑 · 7.5pt"],
-                ]}
-              />
+              <div className="density-presets" role="radiogroup" aria-label="密度预设">
+                {([
+                  ["comfortable", "一般", "11pt · 舒适阅读"],
+                  ["compact", "紧凑", "9pt · 节省纸张"],
+                  ["ultra", "超紧凑", "7.5pt · 四栏排版"],
+                ] as const).map(([value, label, detail]) => (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={settings.density === value}
+                    className={settings.density === value ? "active" : ""}
+                    onClick={() => applyDensity(value)}
+                    key={value}
+                  >
+                    <strong>{label}</strong>
+                    <small>{detail}</small>
+                  </button>
+                ))}
+              </div>
             </PrintGroup>
             <PrintGroup title="说话人排版">
               <Segment
@@ -3999,6 +4019,14 @@ function PrintPreview({
         "--preview-right",
         `${100 - pending}fr`,
       );
+      const previewDocument = contentRef.current?.querySelector(
+        ".print-document",
+      ) as HTMLElement | null;
+      previewDocument?.style.setProperty("--print-left", `${pending}fr`);
+      previewDocument?.style.setProperty(
+        "--print-right",
+        `${100 - pending}fr`,
+      );
     };
     const move = (next: PointerEvent) => update(next.clientX);
     const stop = () => {
@@ -4019,7 +4047,14 @@ function PrintPreview({
       paper.style.setProperty("--preview-right", `${100 - ratio}fr`);
     }
     if (documentNode)
-      documentNode.style.top = `${(topMarginPx * zoom) / 100}px`;
+      {
+        documentNode.style.top = `${(topMarginPx * zoom) / 100}px`;
+        const printDocument = documentNode.querySelector(
+          ".print-document",
+        ) as HTMLElement | null;
+        printDocument?.style.setProperty("--print-left", `${ratio}fr`);
+        printDocument?.style.setProperty("--print-right", `${100 - ratio}fr`);
+      }
   }, [ratio, topMarginPx, zoom]);
   const previewMeta = buildPrintMeta(bundles);
   const fitWidth = () => {
@@ -4251,6 +4286,8 @@ const PrintDocument = forwardRef<
             "--scene-gap": `${settings.sceneGap ?? 1.5}mm`,
             "--print-language-count": shownLanguages.length,
             "--print-column-ratio": `${settings.columnRatio ?? 50}`,
+            "--print-left": `${settings.columnRatio ?? 50}fr`,
+            "--print-right": `${100 - (settings.columnRatio ?? 50)}fr`,
           } as React.CSSProperties
         }
       >
@@ -4366,10 +4403,9 @@ const PrintDocument = forwardRef<
                   optionIndex = line.branchIndex ?? 0;
                   optionTotal = line.branchTotal ?? 0;
                 }
-                const ratio = settings.columnRatio ?? 50;
                 const languageColumns =
                   shownLanguages.length === 2
-                    ? `minmax(0,${ratio}fr) minmax(0,${100 - ratio}fr)`
+                    ? "minmax(0,var(--print-left,50fr)) minmax(0,var(--print-right,50fr))"
                     : `repeat(${shownLanguages.length},minmax(0,1fr))`;
                 const columns =
                   printLayout === "stacked"
@@ -4615,6 +4651,16 @@ function Modal({
         </header>
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
+            <article>
+              <span>v0.8.5 · 2026-08-13</span>
+              <h3>Honey 分支图、栏宽拖动与打印密度修复</h3>
+              <ul>
+                <li>保留 Honey 的多出口 next 图，按各选项专属路径与最近共同节点还原分支和汇合。</li>
+                <li>同一分支不再受源码相邻顺序限制，连续正文不会误装进选项内部。</li>
+                <li>修复两语、三语阅读和打印预览的栏宽实时拖动，并保存调整结果。</li>
+                <li>一般与紧凑采用收敛的编辑式题头；密度卡片明确显示字号与用途。</li>
+              </ul>
+            </article>
             <article>
               <span>v0.8.4 · 2026-08-13</span>
               <h3>可靠剧情顺序与归途导航</h3>

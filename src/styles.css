@@ -5461,10 +5461,7 @@ body:has(.print-studio) .notice-toast {
   position: relative;
 }
 .script-parallel[data-language-count="2"] .utterances {
-  grid-template-columns: minmax(0, var(--reader-left, 50%)) minmax(
-      0,
-      var(--reader-right, 50%)
-    );
+  grid-template-columns: var(--reader-columns, minmax(0, 1fr) minmax(0, 1fr));
 }
 .script-compact .dialogue-main {
   display: block;
@@ -7449,6 +7446,86 @@ button[aria-label*="Post" i],
     opacity: 0.35;
     transform: translateY(8px);
   }
+}
+
+/* Clear, non-wrapping print density choices. */
+.density-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.print-options-panel > .print-group:has(.density-presets) {
+  grid-column: 1 / -1;
+}
+.density-presets button {
+  min-width: 0;
+  min-height: 54px;
+  padding: 8px 7px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--paper-2);
+  text-align: left;
+}
+.density-presets button strong,
+.density-presets button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.density-presets button strong {
+  font-size: 13px;
+}
+.density-presets button small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.density-presets button.active {
+  border-color: var(--red);
+  color: #fff;
+  background: var(--deep);
+  box-shadow: inset 3px 0 0 var(--red);
+}
+.density-presets button.active small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* General and compact presets share a restrained editorial masthead. */
+.print-document.density-comfortable .print-cover-page,
+.print-document.density-compact .print-cover-page {
+  min-height: 0;
+  padding: 3mm 0 3.2mm;
+  border-bottom-width: 0.45mm;
+}
+.print-document.density-comfortable .print-cover-page h1,
+.print-document.density-compact .print-cover-page h1 {
+  margin: 2.2mm 0 0.45mm;
+  font-size: var(--cover-title-font, 15pt);
+  line-height: 1.04;
+}
+.print-document.density-comfortable .print-cover-page h2,
+.print-document.density-compact .print-cover-page h2 {
+  font-size: calc(var(--cover-title-font, 15pt) * 0.68);
+  line-height: 1.08;
+}
+.print-document.density-comfortable .print-cover-page p,
+.print-document.density-compact .print-cover-page p {
+  margin: 1.2mm 0 0.45mm;
+  line-height: 1.18;
+}
+.print-document.density-comfortable .print-cell,
+.print-document.density-compact .print-cell {
+  padding-top: 0.65mm;
+  padding-bottom: 0.65mm;
+}
+.print-document.density-comfortable .print-cell p {
+  line-height: 1.2;
+}
+.print-document.density-compact .print-cell p,
+.print-document.density-compact .print-cell.en p {
+  line-height: 1.12;
 }
 @keyframes page-enter {
   from {
