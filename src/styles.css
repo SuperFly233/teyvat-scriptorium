@@ -2303,6 +2303,28 @@ body::before {
 .print-source-header small {
   display: block;
 }
+.print-source-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.2mm;
+}
+.print-source-context > small {
+  margin: 0;
+  color: #8d3028;
+  font-size: 5pt;
+  letter-spacing: 0.04em;
+}
+.print-source-header .print-source-context > strong {
+  font-size: 7pt;
+  line-height: 1.08;
+}
+.print-source-header .print-source-context > em {
+  color: #59615e;
+  font:
+    500 6.5pt/1.08 "Newsreader Variable",
+    serif;
+  font-style: normal;
+}
 .print-source-header strong {
   font-size: 9pt;
   line-height: 1.1;
@@ -7442,6 +7464,43 @@ button[aria-label*="Post" i],
   .print-ultra-row
   > .print-line:first-child {
   border-right: 0.5px solid #c8ccc9;
+}
+.preview-document
+  .print-document.density-ultra.layout-parallel
+  .print-ultra-row:has(.long-line) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.preview-document
+  .print-document.density-ultra.layout-parallel
+  .print-ultra-row:has(.long-line)
+  > .print-line:first-child {
+  border-right: 0;
+}
+.preview-document
+  .print-document.density-ultra.speaker-column
+  .print-cell {
+  display: flex;
+  gap: 2px;
+  align-items: flex-start;
+}
+.preview-document
+  .print-document.density-ultra.speaker-column
+  .print-cell
+  strong {
+  flex: none;
+}
+.preview-document
+  .print-document.density-ultra.speaker-column
+  .print-cell
+  p {
+  min-width: 0;
+  flex: 1;
+}
+.preview-document
+  .print-document.density-ultra
+  .print-line.print-branch-prompt {
+  border-top: 0.5px solid #c8ccc9;
+  background: #fff;
 }
 
 /* Complete paged print preview */

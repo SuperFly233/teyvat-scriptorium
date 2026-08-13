@@ -20,8 +20,8 @@ describe('buildPrintMeta', () => {
   it('keeps the official chapter title when multiple quest sections share one chapter', () => {
     const current = chapter(1700, '无神怜爱的雪国', '第七章 第一幕')
     expect(buildPrintMeta([bundle(1, current), bundle(2, current), bundle(3, current), bundle(4, current)])).toMatchObject({
-      chapter: '无神怜爱的雪国',
-      quest: '第七章 第一幕 · 4 个任务段',
+      chapter: '第七章 第一幕 · 无神怜爱的雪国',
+      quest: '4 个 Chapter / 任务段',
     })
   })
 

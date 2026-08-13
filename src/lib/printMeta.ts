@@ -8,12 +8,17 @@ export function buildPrintMeta(bundles: PrintBundle[]): PrintMeta {
   const chapters = [...new Map(bundles.map((bundle) => [bundle.chapter.id, bundle.chapter])).values()]
   if (chapters.length === 1) {
     const chapter = chapters[0]
-    if (bundles.length === 1) return { chapter: chapter.title.zh, chapterEn: chapter.title.en, quest: bundles[0].quest.title.zh, questEn: bundles[0].quest.title.en }
+    if (bundles.length === 1) return {
+      chapter: `${chapter.number.zh} · ${chapter.title.zh}`,
+      chapterEn: `${chapter.number.en} · ${chapter.title.en}`,
+      quest: bundles[0].quest.title.zh,
+      questEn: bundles[0].quest.title.en,
+    }
     return {
-      chapter: chapter.title.zh,
-      chapterEn: chapter.title.en,
-      quest: `${chapter.number.zh} · ${bundles.length} 个任务段`,
-      questEn: `${chapter.number.en} · ${bundles.length} selected sections`,
+      chapter: `${chapter.number.zh} · ${chapter.title.zh}`,
+      chapterEn: `${chapter.number.en} · ${chapter.title.en}`,
+      quest: `${bundles.length} 个 Chapter / 任务段`,
+      questEn: `${bundles.length} selected chapters`,
     }
   }
 

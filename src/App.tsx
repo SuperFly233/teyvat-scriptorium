@@ -206,7 +206,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.8.0";
+const APP_VERSION = "v0.8.1";
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
   "mondstadt",
@@ -3259,7 +3259,7 @@ function PrintStudio({
     <>
       <Modal
         wide
-        title="打印与 PDF 选稿台"
+        title="打印排版"
         eyebrow={`${bundles.length} SOURCES · ${count} LINES`}
         onClose={onClose}
       >
@@ -4155,7 +4155,7 @@ const PrintDocument = forwardRef<
             <h1>{meta.chapter}</h1>
             <h2>{meta.chapterEn}</h2>
             <div className="print-episode">
-              <small>章节 / CHAPTER · EPISODE</small>
+              <small>章节 / CHAPTER {bundles[0]?.quest.order}</small>
               <strong>{meta.quest}</strong>
               <em>{meta.questEn}</em>
             </div>
@@ -4190,15 +4190,20 @@ const PrintDocument = forwardRef<
             {bundles.length > 1 && (
               <header className="print-source-header">
                 <span>PART {String(bundleIndex + 1).padStart(2, "0")}</span>
-                <div>
+                <div className="print-source-context">
+                  <small>国家 / NATION</small>
+                  <strong>{bundle.chapter.region.zh}</strong>
+                  <em>{bundle.chapter.region.en}</em>
+                  <small>章幕 / ACT</small>
                   <strong>
-                    {localized(bundle.quest.title, shownLanguages[0])}
+                    {bundle.chapter.number.zh} · {bundle.chapter.title.zh}
                   </strong>
-                  {shownLanguages[1] && (
-                    <small>
-                      {localized(bundle.quest.title, shownLanguages[1])}
-                    </small>
-                  )}
+                  <em>
+                    {bundle.chapter.number.en} · {bundle.chapter.title.en}
+                  </em>
+                  <small>章节 / CHAPTER {bundle.quest.order}</small>
+                  <strong>{bundle.quest.title.zh}</strong>
+                  <em>{bundle.quest.title.en}</em>
                 </div>
               </header>
             )}
@@ -4310,7 +4315,9 @@ const PrintDocument = forwardRef<
                 >
                   {settings.sceneTitles && (
                     <header className="print-scene-header">
-                      <span>SCENE {String(si + 1).padStart(2, "0")}</span>
+                      <span>
+                        EPISODE {String(si + 1).padStart(2, "0")}
+                      </span>
                       <div>
                         <strong>
                           {localized(scene.title, shownLanguages[0])}
@@ -4480,26 +4487,20 @@ function Modal({
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
             <article>
-              <span>v0.8.0 · 2026-08-13</span>
-              <h3>完整层级、系列导航与可靠排印</h3>
+              <span>v0.8.1 · 2026-08-13</span>
+              <h3>分页一致、完整归属与分支校验</h3>
               <ul>
                 <li>
-                  旅行历程支持字体缩放、常驻定位与缩放控制；全站主题统一为浅色、深色、自动三态
+                  修复超紧凑预览与实际 PDF 页数不一致的问题，预览与矢量输出统一使用同一套分页规则
                 </li>
                 <li>
-                  魔神、传说、邀约及连续世界任务统一提供系列上一项与下一项导航
+                  跨任务打印为每一项补齐国家、Act、Chapter 与 Episode 的中英文分行归属信息
                 </li>
                 <li>
-                  对话图重新区分提问、1/X 选项、差异回应与共同后续，避免将顺序对白误判为分支
+                  单 Chapter 标题纳入序号，三选项、三种差异回应及共同后续加入真实数据回归校验
                 </li>
                 <li>
-                  阅读与打印栏宽采用实时样式变量更新，拖动流畅度提升，并修复三语栏宽调整
-                </li>
-                <li>
-                  打印台精简为版式入口，加入全局恢复默认、实时页眉页脚排序和独立上下安全边距
-                </li>
-                <li>
-                  国家、章幕、Chapter 与 Episode 均按中英文分行呈现，并修正一般与紧凑密度的异常留白
+                  打印入口统一命名为“打印排版”，去除已完成选稿后仍出现的旧“选稿台”含义
                 </li>
               </ul>
             </article>
@@ -4645,6 +4646,17 @@ function Changelog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="更新日志" eyebrow="CHANGELOG" onClose={onClose}>
       <div className="changelog">
+        <article>
+          <span>v0.8.0 · 2026-08-13</span>
+          <h3>完整层级、系列导航与可靠排印</h3>
+          <ul>
+            <li>旅行历程支持字体缩放、常驻定位与缩放控制，全站主题统一为浅色、深色、自动三态</li>
+            <li>魔神、传说、邀约及连续世界任务统一提供系列上一项与下一项导航</li>
+            <li>对话图区分提问、1/X 选项、差异回应与共同后续，避免将顺序对白误判为分支</li>
+            <li>阅读与打印栏宽采用实时样式变量更新，并修复三语栏宽调整</li>
+            <li>打印排版加入恢复默认、实时页眉页脚排序和独立上下安全边距</li>
+          </ul>
+        </article>
         <article>
           <span>v0.7.0 · 2026-08-13</span>
           <h3>完整邀约、语义分支与打印工作台</h3>
