@@ -58,7 +58,13 @@ export type Quest = {
 export type ChapterData = {
   schemaVersion: number;
   generatedAt: string;
-  source: { primary: string; url: string; verification: string };
+  source: {
+    primary: string;
+    url: string;
+    verification: string;
+    strategy?: "auto" | "yatta" | "honey";
+    notice?: string;
+  };
   chapter: {
     id: number;
     number: LanguagePair;
@@ -120,6 +126,7 @@ export type CatalogData = {
 
 export type AppSettings = {
   theme: "light" | "dark" | "auto";
+  dataSource: "auto" | "yatta" | "honey";
   viewMode: ViewMode;
   zhSize: number;
   enSize: number;

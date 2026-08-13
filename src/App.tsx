@@ -24,6 +24,7 @@ import {
   FileText,
   Filter,
   GitFork,
+  ExternalLink,
   GripVertical,
   Info,
   Languages,
@@ -154,6 +155,7 @@ const normalizeChapterData = (data: ChapterData): ChapterData => ({
 });
 const DEFAULT_SETTINGS: AppSettings = {
   theme: "auto",
+  dataSource: "auto",
   viewMode: "parallel",
   zhSize: 20,
   enSize: 20,
@@ -206,7 +208,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.8.2";
+const APP_VERSION = "v0.8.3";
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
   "mondstadt",
@@ -358,7 +360,7 @@ function useSessionState<T>(key: string, initial: T) {
   return [value, setValue] as const;
 }
 
-function useData() {
+function useData(dataSource: AppSettings["dataSource"] = "auto") {
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -493,21 +495,32 @@ function useData() {
   async function loadChapter(
     id: number,
     languages: LanguageCode[] = ["CHS", "EN"],
+    source: AppSettings["dataSource"] = dataSource,
   ) {
     setLoading(true);
     setError("");
-    setLoadProgress({ value: 4, label: "正在连接剧情资料源…" });
+    setLoadProgress({
+      value: 4,
+      label:
+        source === "honey"
+          ? "正在连接 Honey Hunter World…"
+          : source === "yatta"
+            ? "正在连接 Project Amber / Yatta…"
+            : "正在连接并比对剧情资料源…",
+    });
     try {
       const languageKey = languages.slice(0, 3).join(",");
-      const cached = sessionStorage.getItem(`chapter:${id}:${languageKey}`);
+      const cached = sessionStorage.getItem(
+        `chapter:${id}:${languageKey}:${source}`,
+      );
       if (cached) {
         setChapter(normalizeChapterData(JSON.parse(cached)));
         return true;
       }
       const url =
-        id === 1700 && languageKey === "CHS,EN"
+        source === "yatta" && id === 1700 && languageKey === "CHS,EN"
           ? "/data/quest-1700.json"
-          : `/api/quest/${id}?langs=${encodeURIComponent(languageKey)}`;
+          : `/api/quest/${id}?langs=${encodeURIComponent(languageKey)}&source=${source}`;
       const response = await fetch(url);
       if (!response.ok)
         throw new Error(
@@ -544,10 +557,15 @@ function useData() {
         data = JSON.parse(new TextDecoder().decode(bytes)) as ChapterData;
       } else data = (await response.json()) as ChapterData;
       data = normalizeChapterData(data);
+      data.source.strategy ||= source;
+      data.source.notice ||=
+        source === "yatta"
+          ? "仅使用 Project Amber / Yatta 的结构化多语言数据。"
+          : undefined;
       setChapter(data);
       try {
         sessionStorage.setItem(
-          `chapter:${id}:${languageKey}`,
+          `chapter:${id}:${languageKey}:${source}`,
           JSON.stringify(data),
         );
       } catch {
@@ -2974,11 +2992,13 @@ function SettingsSheet({
   onChange,
   onClose,
   onGuide,
+  chapter,
 }: {
   value: AppSettings;
   onChange: (s: AppSettings) => void;
   onClose: () => void;
   onGuide: () => void;
+  chapter?: ChapterData | null;
 }) {
   return (
     <Modal title="阅读设置" eyebrow="SETTINGS" onClose={onClose}>
@@ -3005,6 +3025,86 @@ function SettingsSheet({
             ))}
           </div>
         </SettingRow>
+        <section className="source-settings" aria-labelledby="source-settings-title">
+          <header>
+            <span>DATA &amp; ATTRIBUTION</span>
+            <h3 id="source-settings-title">剧情数据来源</h3>
+            <p>切换会重新载入当前任务；实际采用的来源会记录在任务数据中。</p>
+          </header>
+          <div className="source-strategy-cards">
+            {(
+              [
+                [
+                  "auto",
+                  "自动推荐",
+                  "Yatta 对齐多语言，Honey 校验并补强对话节点；任一来源暂不可用时自动回退。",
+                ],
+                [
+                  "yatta",
+                  "Project Amber / Yatta",
+                  "结构化 JSON、15 种语言与任务目录最稳定；部分分支需由节点关系进一步还原。",
+                ],
+                [
+                  "honey",
+                  "Honey Hunter World",
+                  "网页台词和 next 分支关系清晰；目录与部分多语言元数据仍需由 Yatta 补全。",
+                ],
+              ] as const
+            ).map(([id, title, description]) => (
+              <button
+                key={id}
+                className={(value.dataSource || "auto") === id ? "active" : ""}
+                onClick={() => onChange({ ...value, dataSource: id })}
+              >
+                <span>{(value.dataSource || "auto") === id && <Check size={14} />}</span>
+                <strong>{title}</strong>
+                <small>{description}</small>
+              </button>
+            ))}
+          </div>
+          {chapter?.source && (
+            <div className="active-source-note">
+              <strong>当前任务实际来源：{chapter.source.primary}</strong>
+              {chapter.source.notice && <p>{chapter.source.notice}</p>}
+            </div>
+          )}
+          <div className="source-links">
+            <a
+              href={
+                chapter
+                  ? `https://gi.yatta.moe/chs/archive/quest/${chapter.chapter.id}`
+                  : "https://gi.yatta.moe/chs/archive/quest"
+              }
+              target="_blank"
+              rel="noreferrer"
+            >
+              打开 Yatta 原页面 <ExternalLink size={13} />
+            </a>
+            <a
+              href={
+                chapter
+                  ? `https://gensh.honeyhunterworld.com/ch_${chapter.chapter.id}/?lang=CHS`
+                  : "https://gensh.honeyhunterworld.com/?lang=CHS"
+              }
+              target="_blank"
+              rel="noreferrer"
+            >
+              打开 Honey 原页面 <ExternalLink size={13} />
+            </a>
+          </div>
+          <div className="attribution-notice">
+            <strong>内容归属与实现说明</strong>
+            <p>
+              《原神》的剧情文本、角色、名称、图像及商标归 HoYoverse / COGNOSPHERE
+              及相关权利人所有。本项目是非官方、非商业的阅读与语言对照工具，不隶属于或受其认可。
+            </p>
+            <p>
+              本站不创作原游戏剧情，只负责公开资料的节点匹配、多语言对齐、分支还原、搜索筛选与打印排版。Project
+              Amber / Yatta、Honey Hunter World 及 Genshin Impact Wiki
+              也均为第三方资料来源，使用时请同时遵守其各自条款。
+            </p>
+          </div>
+        </section>
         <SettingRow title="对照语言">
           <LanguagePicker
             value={value.languages || ["CHS", "EN"]}
@@ -4496,17 +4596,17 @@ function Modal({
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
             <article>
-              <span>v0.8.2 · 2026-08-13</span>
-              <h3>轻量系列导航</h3>
+              <span>v0.8.3 · 2026-08-13</span>
+              <h3>双源融合与透明归属</h3>
               <ul>
                 <li>
-                  系列任务前后切换移出顶部悬浮层，固定导航、切换条和阅读工具栏不再互相覆盖
+                  设置新增自动融合、仅 Yatta 与 Honey 优先三种真实数据策略，切换后会重新载入当前任务
                 </li>
                 <li>
-                  去除“同系列”及“已经是开头/结尾”等重复文案，边界状态仅以灰色禁用箭头表达
+                  自动模式以 Yatta 提供多语言目录和元数据，并用 Honey 的台词节点与 next 关系校验补强对话分支
                 </li>
                 <li>
-                  桌面和手机统一采用紧凑左右布局，并补充不重叠与无横向溢出的浏览器回归检查
+                  数据设置明确展示内容权利归属、第三方来源、实现逻辑、回退状态和当前任务原页面直达链接
                 </li>
               </ul>
             </article>
@@ -4653,6 +4753,14 @@ function Changelog({ onClose }: { onClose: () => void }) {
     <Modal title="更新日志" eyebrow="CHANGELOG" onClose={onClose}>
       <div className="changelog">
         <article>
+          <span>v0.8.2 · 2026-08-13</span>
+          <h3>轻量系列导航</h3>
+          <ul>
+            <li>系列任务前后切换移出顶部悬浮层，固定导航、切换条和阅读工具栏不再互相覆盖</li>
+            <li>去除重复状态文案，边界仅以灰色禁用箭头表达，并补充桌面与手机回归检查</li>
+          </ul>
+        </article>
+        <article>
           <span>v0.8.1 · 2026-08-13</span>
           <h3>分页一致、完整归属与分支校验</h3>
           <ul>
@@ -4753,6 +4861,10 @@ function Changelog({ onClose }: { onClose: () => void }) {
 }
 
 export default function App() {
+  const [settings, setSettings] = useStoredState<AppSettings>(
+    "teyvat:settings:v5",
+    DEFAULT_SETTINGS,
+  );
   const {
     catalog,
     catalogSync,
@@ -4763,12 +4875,8 @@ export default function App() {
     loadProgress,
     error,
     setError,
-  } = useData();
+  } = useData(settings.dataSource || "auto");
   const [page, setPage] = useState<"catalog" | "reader">("catalog");
-  const [settings, setSettings] = useStoredState<AppSettings>(
-    "teyvat:settings:v5",
-    DEFAULT_SETTINGS,
-  );
   const [printSettings, setPrintSettings] = useStoredState<PrintSettings>(
     "teyvat:print",
     DEFAULT_PRINT,
@@ -4787,6 +4895,10 @@ export default function App() {
     settings.languages || ["CHS", "EN"],
   );
   languageRef.current = settings.languages || ["CHS", "EN"];
+  const dataSourceRef = useRef<AppSettings["dataSource"]>(
+    settings.dataSource || "auto",
+  );
+  dataSourceRef.current = settings.dataSource || "auto";
   useEffect(() => {
     if (!catalogSync.checking && (catalogSync.added || catalogSync.modified))
       setNotice(
@@ -4812,7 +4924,14 @@ export default function App() {
   const showLocation = async () => {
     const id = Number(new URLSearchParams(location.search).get("chapter"));
     if (id) {
-      if (await loadChapter(id, languageRef.current)) setPage("reader");
+      if (
+        await loadChapter(
+          id,
+          languageRef.current,
+          dataSourceRef.current,
+        )
+      )
+        setPage("reader");
     } else {
       setPage("catalog");
       setChapter(null);
@@ -4840,7 +4959,13 @@ export default function App() {
     return () => removeEventListener("popstate", onPopState);
   }, []);
   const openItem = async (item: CatalogItem) => {
-    if (await loadChapter(item.id, settings.languages || ["CHS", "EN"])) {
+    if (
+      await loadChapter(
+        item.id,
+        settings.languages || ["CHS", "EN"],
+        settings.dataSource || "auto",
+      )
+    ) {
       history.pushState(
         { teyvat: true, page: "reader", fromCatalog: true },
         "",
@@ -4852,8 +4977,15 @@ export default function App() {
   useEffect(() => {
     const id = Number(new URLSearchParams(location.search).get("chapter"));
     if (page === "reader" && id)
-      loadChapter(id, settings.languages || ["CHS", "EN"]);
-  }, [(settings.languages || ["CHS", "EN"]).join(",")]);
+      loadChapter(
+        id,
+        settings.languages || ["CHS", "EN"],
+        settings.dataSource || "auto",
+      );
+  }, [
+    (settings.languages || ["CHS", "EN"]).join(","),
+    settings.dataSource,
+  ]);
   const back = () => {
     if (location.search.includes("chapter=") && history.state?.fromCatalog)
       history.back();
@@ -5055,6 +5187,7 @@ export default function App() {
         <SettingsSheet
           value={settings}
           onChange={setSettings}
+          chapter={chapter}
           onClose={() => setSettingsOpen(false)}
           onGuide={() => {
             localStorage.removeItem("teyvat:catalog-guide:v1");

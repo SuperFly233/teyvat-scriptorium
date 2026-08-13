@@ -11,6 +11,83 @@ async function fetchLanguage(lang, id) {
   return payload.response === 200 ? payload.data : null
 }
 
+function extractHoneyBlocks(html) {
+  const marker = 'dialog_data.push('
+  const blocks = []
+  let cursor = 0
+  while ((cursor = html.indexOf(marker, cursor)) >= 0) {
+    const start = cursor + marker.length
+    let depth = 0
+    let inString = false
+    let escaped = false
+    let end = -1
+    for (let index = start; index < html.length; index += 1) {
+      const char = html[index]
+      if (inString) {
+        if (escaped) escaped = false
+        else if (char === '\\') escaped = true
+        else if (char === '"') inString = false
+        continue
+      }
+      if (char === '"') inString = true
+      else if (char === '{') depth += 1
+      else if (char === '}' && --depth === 0) {
+        end = index + 1
+        break
+      }
+    }
+    if (end > start) {
+      try { blocks.push(JSON.parse(html.slice(start, end))) } catch { /* malformed upstream block */ }
+      cursor = end
+    } else break
+  }
+  return blocks
+}
+
+async function fetchHoneyLanguage(lang, questId) {
+  const response = await fetch(`https://gensh.honeyhunterworld.com/q_${questId}/?lang=${lang}`, {
+    headers: { 'user-agent': 'Teyvat-Scriptorium/0.8 (+non-commercial bilingual reader)' },
+    signal: AbortSignal.timeout(8000),
+  })
+  if (!response.ok) return null
+  const blocks = extractHoneyBlocks(await response.text())
+  if (!blocks.length) return null
+  const nodes = new Map()
+  blocks.forEach((block) => Object.entries(block.dialogues || {}).forEach(([nodeId, node]) => nodes.set(String(nodeId), node)))
+  return nodes
+}
+
+async function applyHoneyGraph(data, languages) {
+  const results = await Promise.all(data.quests.flatMap((quest) => languages.map(async (lang) => ({
+    questId: quest.id,
+    lang,
+    nodes: await fetchHoneyLanguage(lang, quest.id).catch(() => null),
+  }))))
+  const maps = new Map(results.filter((entry) => entry.nodes).map((entry) => [`${entry.questId}:${entry.lang}`, entry.nodes]))
+  let matched = 0
+  data.quests.forEach((quest) => quest.scenes.forEach((scene) => scene.lines.forEach((line) => {
+    languages.forEach((lang) => {
+      const nodes = maps.get(`${quest.id}:${lang}`)
+      if (!nodes) return
+      const targetId = line.nodeId.endsWith('-player') ? line.nextNodeId : line.nodeId
+      const node = nodes.get(String(targetId))
+      if (!node?.line) return
+      line.text.translations[lang] = node.line
+      if (lang === 'CHS') line.text.zh = node.line
+      if (lang === 'EN') line.text.en = node.line
+      if (node.from) {
+        const role = lang === 'CHS' && node.from === 'Traveler' ? '旅行者' : node.from
+        line.speaker.translations[lang] = role
+        if (lang === 'CHS') line.speaker.zh = role
+        if (lang === 'EN') line.speaker.en = role
+      }
+      if (!line.nodeId.endsWith('-player') && Array.isArray(node.next) && node.next.length === 1) line.nextNodeId = String(node.next[0])
+      matched += 1
+    })
+  })))
+  return { matched, requested: data.quests.length * languages.length, available: maps.size }
+}
+
 function localized(translations, fallback = '') {
   const first = Object.values(translations).find(Boolean) || fallback
   return { zh: translations.CHS || first, en: translations.EN || first, translations }
@@ -70,7 +147,7 @@ function normalize(dataByLang, id, languages) {
     schemaVersion: 3,
     generatedAt: new Date().toISOString(),
     languages,
-    source: { primary: 'Project Amber / Yatta', url: `https://gi.yatta.moe/en/archive/quest/${id}`, verification: `https://gensh.honeyhunterworld.com/ch_${id}/?lang=EN` },
+    source: { primary: 'Project Amber / Yatta', url: `https://gi.yatta.moe/chs/archive/quest/${id}`, verification: `https://gensh.honeyhunterworld.com/ch_${id}/?lang=CHS` },
     chapter: { id: Number(id), number: infoMap('chapterNum'), title: infoMap('chapterTitle'), region: infoMap('chapterImageTitle') },
     stats: { quests: quests.length, scenes: allScenes.length, lines: allLines.length, missingPairs: allLines.filter((line) => languages.some((lang) => !line.text.translations?.[lang])).length },
     quests,
@@ -83,15 +160,30 @@ export async function onRequestGet(context) {
   const url = new URL(context.request.url)
   const requested = (url.searchParams.get('langs') || 'CHS,EN').split(',').map((lang) => lang.toUpperCase()).filter((lang, index, list) => SUPPORTED.has(lang) && list.indexOf(lang) === index).slice(0, 3)
   const languages = requested.length ? requested : ['CHS','EN']
+  const requestedSource = url.searchParams.get('source') || 'auto'
+  const source = ['auto','yatta','honey'].includes(requestedSource) ? requestedSource : 'auto'
   try {
     const cache = caches.default
-    const cacheKey = new Request(`${url.origin}${url.pathname}?langs=${languages.join(',')}`, context.request)
+    const cacheKey = new Request(`${url.origin}${url.pathname}?langs=${languages.join(',')}&source=${source}`, context.request)
     const hit = await cache.match(cacheKey)
     if (hit) return hit
     const payloads = await Promise.all(languages.map((lang) => fetchLanguage(lang, id)))
     const dataByLang = Object.fromEntries(languages.map((lang, index) => [lang, payloads[index]]))
     if (!payloads.some(Boolean)) return Response.json({ error: 'Quest not found upstream' }, { status: 404 })
-    const response = Response.json(normalize(dataByLang, id, languages), { headers: { 'Cache-Control': 'public, max-age=86400, s-maxage=604800', 'X-Data-Source': 'Project-Amber' } })
+    const data = normalize(dataByLang, id, languages)
+    data.source.strategy = source
+    let headerSource = 'Project-Amber'
+    if (source !== 'yatta') {
+      const honey = await applyHoneyGraph(data, languages)
+      if (honey.matched) {
+        data.source.primary = source === 'honey' ? 'Honey Hunter World（Yatta 补全元数据）' : 'Project Amber / Yatta + Honey Hunter World'
+        data.source.notice = `Honey 已匹配 ${honey.matched} 个语言节点；章节目录、标题及 Honey 未覆盖的内容由 Yatta 补全。`
+        headerSource = source === 'honey' ? 'Honey-Hunter+Project-Amber' : 'Project-Amber+Honey-Hunter'
+      } else {
+        data.source.notice = 'Honey 当前未能返回可匹配节点，本次已明确回退到 Project Amber / Yatta。'
+      }
+    } else data.source.notice = '仅使用 Project Amber / Yatta 的结构化多语言接口。'
+    const response = Response.json(data, { headers: { 'Cache-Control': 'public, max-age=86400, s-maxage=604800', 'X-Data-Source': headerSource } })
     context.waitUntil(cache.put(cacheKey, response.clone()))
     return response
   } catch (error) {

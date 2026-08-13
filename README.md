@@ -28,7 +28,7 @@ npm run preview
 npm run data:update
 ```
 
-目录与正文从 Project Amber / Yatta 的结构化接口读取，并按游戏内部 ID 合并；邀约事件从 Honey Hunter 的独立目录生成可追溯快照。正文支持 15 种游戏语言，每次只加载当前选择的 1–3 种语言。版本元数据优先采用 Yatta 更新记录；其未覆盖的早期任务由 Genshin Impact Wiki 的 `Released in Version` 分类补足。地区元数据同样优先采用 Wiki 的任务分类；只能由标题识别的条目会标记为推断，上游目录没有提供归属字段的条目会明确显示“版本数据缺失”或“未归属地区”。Wiki 查询结果缓存于 `public/data/wiki-metadata.json`，外站短暂不可用不会破坏已有目录。
+正文提供三种可切换策略：自动模式由 Project Amber / Yatta 提供结构化多语言目录与元数据，再以 Honey Hunter World 的台词节点和 `next` 关系校验、补强分支；Yatta 模式仅使用其结构化接口；Honey 模式以 Honey 台词为先，同时由 Yatta 补齐目录及缺失元数据。上游暂不可用时会显示实际回退状态，不会把回退伪装成所选来源。正文支持 15 种游戏语言，每次只加载当前选择的 1–3 种语言。版本元数据优先采用 Yatta 更新记录；其未覆盖的早期任务由 Genshin Impact Wiki 的 `Released in Version` 分类补足。地区元数据同样优先采用 Wiki 的任务分类；只能由标题识别的条目会标记为推断，上游目录没有提供归属字段的条目会明确显示“版本数据缺失”或“未归属地区”。Wiki 查询结果缓存于 `public/data/wiki-metadata.json`，外站短暂不可用不会破坏已有目录。
 
 目录提供任务档案与旅行历程两种视图。任务类型、国家和版本均可多选，排序使用一致的自绘菜单；传说任务与邀约事件会明确标注角色、章节及幕次。旅行历程可按版本或国家编排，同一版本依国家顺序、同一章依章幕数字由上至下排列；各国家和任务类型均可带动画展开，世界、活动与邀约也能从时间线直接进入。顶部快速导航、底部定位条和“最新版本”按钮保持同步。
 
@@ -63,4 +63,4 @@ npm run publish
 
 ## 数据与权利说明
 
-剧情文本及《原神》相关名称、商标的权利归其各自权利人所有。本项目是非官方、非商业的语言学习与剧情查阅工具，不隶属于或受 HoYoverse / COGNOSPHERE 认可。数据快照来源于 [Project Amber / Yatta](https://gi.yatta.moe/)；[Honey Hunter](https://gensh.honeyhunterworld.com/) 用于交叉核验；版本与地区补充元数据来自 [Genshin Impact Wiki](https://genshin-impact.fandom.com/)。请勿将项目数据用于商业再分发。
+剧情文本及《原神》相关名称、图像和商标的权利归 HoYoverse / COGNOSPHERE 及相关权利人所有。本项目是非官方、非商业的语言学习与剧情查阅工具，不隶属于或受其认可。数据来自 [Project Amber / Yatta](https://gi.yatta.moe/) 与 [Honey Hunter World](https://gensh.honeyhunterworld.com/)，版本与地区补充元数据来自 [Genshin Impact Wiki](https://genshin-impact.fandom.com/)。网站只负责公开资料的节点匹配、多语言对齐、分支还原、搜索筛选和打印排版；设置中可查看每种来源的优缺点、当前实际来源及当前任务原页面。请勿将项目数据用于商业再分发。
