@@ -789,6 +789,7 @@ body::before {
   min-height: calc(100vh - 66px);
   padding-bottom: 90px;
   background: var(--paper);
+  animation: page-enter 0.28s cubic-bezier(0.2, 0.75, 0.2, 1) both;
 }
 .catalog-hero {
   min-height: 360px;
@@ -1056,6 +1057,7 @@ body::before {
   min-height: calc(100vh - 66px);
   padding-bottom: 80px;
   background: var(--paper);
+  animation: page-enter 0.28s cubic-bezier(0.2, 0.75, 0.2, 1) both;
 }
 .reader-topbar {
   height: 54px;
@@ -1721,6 +1723,7 @@ body::before {
   place-items: center;
   background: rgb(8 15 13 / 70%);
   backdrop-filter: blur(7px);
+  animation: modal-fade-in 0.2s ease-out both;
 }
 .modal {
   width: min(600px, 100%);
@@ -1729,6 +1732,7 @@ body::before {
   color: var(--ink);
   background: var(--paper-2);
   box-shadow: 0 30px 100px rgb(0 0 0 / 35%);
+  animation: modal-panel-in 0.24s cubic-bezier(0.2, 0.75, 0.2, 1) both;
 }
 .modal.wide {
   width: min(1050px, 100%);
@@ -6940,6 +6944,8 @@ button[aria-label*="Post" i],
 .journey-timeline .timeline-node {
   width: 270px;
   padding-right: 14px;
+  animation: timeline-node-enter 0.42s cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  animation-delay: min(calc(var(--node-index, 0) * 24ms), 240ms);
 }
 .journey-timeline .timeline-branches {
   min-height: 330px;
@@ -6963,6 +6969,14 @@ button[aria-label*="Post" i],
   margin-bottom: 9px;
   border: 1px solid rgb(255 255 255 / 10%);
   background: rgb(0 0 0 / 11%);
+  transition:
+    border-color 0.22s ease,
+    background-color 0.22s ease,
+    transform 0.22s ease;
+}
+.timeline-country-group:hover {
+  border-color: rgb(216 200 137 / 28%);
+  background: rgb(255 255 255 / 3%);
 }
 .country-group-heading {
   width: 100%;
@@ -7020,6 +7034,13 @@ button[aria-label*="Post" i],
   list-style: none;
   color: #cbd7d3;
   cursor: pointer;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease;
+}
+.timeline-task-group summary:hover {
+  color: #fff;
+  background: rgb(255 255 255 / 4%);
 }
 .timeline-task-group summary::-webkit-details-marker {
   display: none;
@@ -7046,8 +7067,13 @@ button[aria-label*="Post" i],
   border: 1px solid rgb(255 255 255 / 9%);
   color: #edf1ef;
   background: rgb(255 255 255 / 3%);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 .timeline-task-group button:hover {
+  transform: translateX(3px);
   border-color: #d47769;
   background: rgb(255 255 255 / 8%);
 }
@@ -7161,6 +7187,11 @@ button[aria-label*="Post" i],
   color: #fff;
   background: #8d3f36;
   box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+  animation: latest-button-enter 0.28s cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .timeline-latest:hover {
   transform: translateX(2px);
@@ -7419,10 +7450,57 @@ button[aria-label*="Post" i],
     transform: translateY(8px);
   }
 }
+@keyframes page-enter {
+  from {
+    opacity: 0.45;
+    transform: translateY(5px);
+  }
+}
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes modal-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+@keyframes timeline-node-enter {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+@keyframes latest-button-enter {
+  from {
+    opacity: 0;
+    transform: translateX(18px) scale(0.96);
+  }
+}
 @keyframes task-cluster-in {
   from {
     opacity: 0;
     transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .journey-timeline .timeline-node,
+  .timeline-latest,
+  .timeline-task-group > div,
+  .journey-timeline .timeline-track,
+  .catalog-page,
+  .reader-page,
+  .modal-backdrop,
+  .modal {
+    animation: none !important;
+  }
+  .country-group-reveal,
+  .timeline-country-group,
+  .timeline-task-group button,
+  .timeline-task-group summary {
+    transition: none !important;
   }
 }
 .branch-prompt {

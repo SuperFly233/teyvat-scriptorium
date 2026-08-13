@@ -208,7 +208,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.8.3";
+const APP_VERSION = "v0.8.4";
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
   "mondstadt",
@@ -304,13 +304,16 @@ const chineseNumber = (raw = "") => {
   return digits[raw] || 0;
 };
 const narrativeOrder = (item: CatalogItem) => {
+  if (/序奏|Prelude/i.test(`${item.chapter.zh} ${item.chapter.en}`)) return 0;
   const chapter = item.chapter.zh.match(/第([^章 ]+)章/)?.[1] || "";
   const act = item.chapter.zh.match(/第([^幕 ]+)幕/)?.[1] || "";
+  if (!chapter && !act) return -1;
   return chineseNumber(chapter) * 100 + chineseNumber(act);
 };
 const chronologicalSort = (a: CatalogItem, b: CatalogItem) =>
   NATION_ORDER.indexOf(a.nation) - NATION_ORDER.indexOf(b.nation) ||
-  narrativeOrder(a) - narrativeOrder(b) ||
+  (narrativeOrder(a) < 0 ? Number.MAX_SAFE_INTEGER : narrativeOrder(a)) -
+    (narrativeOrder(b) < 0 ? Number.MAX_SAFE_INTEGER : narrativeOrder(b)) ||
   a.id - b.id;
 const seriesKey = (item: CatalogItem) => {
   if (item.type === "aq") return `aq:${item.nation}`;
@@ -320,10 +323,14 @@ const seriesKey = (item: CatalogItem) => {
     return `wq:${item.imageTitle.zh}`;
   return "";
 };
-const seriesOrder = (item: CatalogItem) =>
-  narrativeOrder(item) ||
-  chineseNumber(item.chapter.zh.match(/第([^章幕 ]+)[章幕]/)?.[1] || "") * 100 +
-    item.id;
+const seriesOrder = (item: CatalogItem) => {
+  const explicit = narrativeOrder(item);
+  if (explicit >= 0) return explicit;
+  const numeric = chineseNumber(
+    item.chapter.zh.match(/第([^章幕 ]+)[章幕]/)?.[1] || "",
+  );
+  return numeric ? numeric * 100 : 100000 + item.id;
+};
 
 function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(() => {
@@ -1219,9 +1226,15 @@ function JourneyTimeline({
   items: CatalogItem[];
   onOpen: (item: CatalogItem) => void;
 }) {
-  const [mode, setMode] = useState<"version" | "nation">("version");
+  const [mode, setMode] = useSessionState<"version" | "nation">(
+    "teyvat:journey:mode",
+    "version",
+  );
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [position, setPosition] = useState(0);
+  const [position, setPosition] = useSessionState<number>(
+    "teyvat:journey:position",
+    0,
+  );
   const [scale, setScale] = useSessionState<number>(
     "teyvat:journey:scale",
     100,
@@ -1294,6 +1307,10 @@ function JourneyTimeline({
       });
     setPosition(value);
   };
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => seek(position));
+    return () => cancelAnimationFrame(frame);
+  }, [mode, groups.length]);
   const jump = (index: number) =>
     seek(
       groups.length > 1 ? Math.round((index / (groups.length - 1)) * 1000) : 0,
@@ -1363,12 +1380,13 @@ function JourneyTimeline({
         onScroll={() => sync("body")}
       >
         <div className="timeline-track">
-          {groups.map((group) => (
+          {groups.map((group, groupIndex) => (
             <article
               className={
                 group.milestone ? "timeline-node milestone" : "timeline-node"
               }
               key={group.key}
+              style={{ "--node-index": groupIndex } as React.CSSProperties}
             >
               <div className="version-mark">
                 <b>{group.label}</b>
@@ -1453,10 +1471,12 @@ function JourneyTimeline({
           <span>最新</span>
         </div>
       </div>
-      <button className="timeline-latest" onClick={() => seek(1000)}>
-        <ChevronsRight size={17} />
-        <span>最新版本</span>
-      </button>
+      {position < 920 && (
+        <button className="timeline-latest" onClick={() => seek(1000, true)}>
+          <ChevronsRight size={17} />
+          <span>最新版本</span>
+        </button>
+      )}
     </section>
   );
 }
@@ -4596,17 +4616,17 @@ function Modal({
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
             <article>
-              <span>v0.8.3 · 2026-08-13</span>
-              <h3>双源融合与透明归属</h3>
+              <span>v0.8.4 · 2026-08-13</span>
+              <h3>可靠剧情顺序与归途导航</h3>
               <ul>
                 <li>
-                  设置新增自动融合、仅 Yatta 与 Honey 优先三种真实数据策略，切换后会重新载入当前任务
+                  《空月之歌》按上游明确章幕排序：序奏《归途》位于第一幕之前，不再用任务 ID 猜测缺省顺序
                 </li>
                 <li>
-                  自动模式以 Yatta 提供多语言目录和元数据，并用 Honey 的台词节点与 next 关系校验补强对话分支
+                  顶部任务目录、站点标志与更新日志统一先回首页；剧情树会恢复离开前的模式和横向位置
                 </li>
                 <li>
-                  数据设置明确展示内容权利归属、第三方来源、实现逻辑、回退状态和当前任务原页面直达链接
+                  最新版本按钮在抵达终点后自动隐藏，向左浏览到足够距离后带动画重现，并细化页面、弹窗和时间线动效
                 </li>
               </ul>
             </article>
@@ -4752,6 +4772,14 @@ function Changelog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="更新日志" eyebrow="CHANGELOG" onClose={onClose}>
       <div className="changelog">
+        <article>
+          <span>v0.8.3 · 2026-08-13</span>
+          <h3>双源融合与透明归属</h3>
+          <ul>
+            <li>新增自动融合、仅 Yatta 与 Honey 优先三种数据策略，并显示实际来源与回退状态</li>
+            <li>补充数据权利归属、实现逻辑、来源优缺点及当前任务原页面链接</li>
+          </ul>
+        </article>
         <article>
           <span>v0.8.2 · 2026-08-13</span>
           <h3>轻量系列导航</h3>
@@ -5000,6 +5028,17 @@ export default function App() {
       setError("");
     }
   };
+  const goCatalog = () => {
+    if (page === "catalog" && !location.search.includes("chapter=")) return;
+    history.pushState(
+      { teyvat: true, page: "catalog", fromCatalog: false },
+      "",
+      location.pathname,
+    );
+    setPage("catalog");
+    setChapter(null);
+    setError("");
+  };
   const queueSelection = (
     selection: Set<string>,
     quest: Quest,
@@ -5124,9 +5163,12 @@ export default function App() {
         page={page}
         theme={settings.theme}
         onTheme={(theme) => setSettings({ ...settings, theme })}
-        onCatalog={() => page === "reader" && back()}
+        onCatalog={goCatalog}
         onSettings={() => setSettingsOpen(true)}
-        onChangelog={() => setChangelogOpen(true)}
+        onChangelog={() => {
+          goCatalog();
+          setChangelogOpen(true);
+        }}
       />
       {page === "catalog" && catalog && (
         <Catalog
