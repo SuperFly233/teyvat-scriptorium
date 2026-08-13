@@ -38,12 +38,14 @@ function collectLines(zhStep, enStep) {
         const enText = enTexts[textIndex]?.text || ''
         if (!zhText && !enText) continue
         const isNarration = Boolean(zhItem.isBlackScreen)
-        const isChoice = !isNarration && (!zhItem.role || itemId.endsWith('-player') || zhItem.type === 'MultiDialog')
+        const isChoice = !isNarration && zhItem.type === 'MultiDialog' && count > 1
         lines.push({
           key: `${zhStep.id}-${taskIndex}-${itemId}-${textIndex}`,
           nodeId: itemId,
           variant: textIndex,
           kind: isNarration ? 'narration' : isChoice ? 'choice' : 'dialogue',
+          sourceType: zhItem.type || '',
+          nextNodeId: String(zhTexts[textIndex]?.next ?? ''),
           speaker: {
             zh: isNarration ? '' : zhItem.role || '旅行者',
             en: isNarration ? '' : enItem?.role || 'Traveler',

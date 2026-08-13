@@ -1,11 +1,12 @@
-import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpenText, Check, CheckSquare2, ChevronDown, CircleCheck, Clock3,
+  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpenText, Check, CheckSquare2, ChevronDown, ChevronsRight, CircleCheck, Clock3,
   Eraser, FileDown, FileText, Filter, GitFork, GripVertical, Info, Languages, LibraryBig, ListTree, MapPinned, MousePointer2,
   LoaderCircle, Menu, Moon, Plus, Printer, RotateCcw, Search, SlidersHorizontal,
   Settings, ShoppingBasket, Snowflake, Square, Sun, Trash2, X, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { filterScenes } from './lib/filter'
+import { enrichBranches } from './lib/branches'
 import { buildPrintMeta } from './lib/printMeta'
 import { formatGameText, normalizeSearch } from './lib/text'
 import type {
@@ -31,12 +32,10 @@ const VIEW_OPTIONS: { id: ViewMode; label: string }[] = [
   { id: 'parallel', label: '并列阅读' }, { id: 'stacked', label: '上下阅读' }, { id: 'compact', label: '台词表' },
 ]
 const languageInfo = (code: LanguageCode) => LANGUAGE_OPTIONS.find((item) => item.code === code) || LANGUAGE_OPTIONS[0]
-const localized = (value: LanguagePair, code: LanguageCode) => value.translations?.[code] || (code === 'CHS' ? value.zh : code === 'EN' ? value.en : '') || value.zh || value.en
-const lineSignature = (line: DialogueLine) => `${line.text.zh}\u0000${line.text.en}`
+const localized = (value: LanguagePair, code: LanguageCode) => code === 'CHS' ? value.translations?.CHS || value.zh : code === 'EN' ? value.translations?.EN || value.en : value.translations?.[code] || ''
 const normalizeChapterData = (data: ChapterData): ChapterData => ({ ...data, quests:data.quests.map((quest) => ({ ...quest, scenes:quest.scenes.map((scene) => {
-  const canonicalChoices = new Set(scene.lines.filter((line) => line.kind === 'choice' && !line.nodeId.endsWith('-player')).map(lineSignature))
   const looksNarration = (line:DialogueLine) => /^(You |After you |Time flies|After a lovely|Meanwhile|Later,|Following )/i.test(line.text.en) || /^(在.+…|顺利|与朋友享用|将欢笑|在屋中)/.test(line.text.zh)
-  return { ...scene, lines:scene.lines.filter((line) => !(line.nodeId.endsWith('-player') && canonicalChoices.has(lineSignature(line)))).map((line) => line.kind === 'narration' || (line.kind === 'choice' && looksNarration(line)) ? { ...line, kind:'narration' as const, speaker:{ zh:'', en:'', translations:{} } } : line) }
+  return { ...scene, lines:enrichBranches(scene.lines).map((line) => line.kind === 'narration' || (line.kind === 'choice' && looksNarration(line)) ? { ...line, kind:'narration' as const, speaker:{ zh:'', en:'', translations:{} } } : line) }
 }) })) })
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'light', viewMode: 'parallel', zhSize: 20, enSize: 20, lineHeight: 1.5, columnRatio: 50,
@@ -45,15 +44,16 @@ const DEFAULT_SETTINGS: AppSettings = {
 }
 const DEFAULT_PRINT: PrintSettings = {
   layout: 'parallel', density: 'compact', paper: 'a4', orientation: 'portrait', fontSize: 9,
-  margin: 12, color: 'accent', cover: true, sceneTitles: true, speakers: true, lineNumbers: true, columnRatio: 50,
+  margin: 12, color: 'accent', cover: true, sceneTitles: true, sceneLeads:true, speakers: true, lineNumbers: true, columnRatio: 50,
   speakerLayout:'column', speakerSize:7, speakerWidth:14, numberSize:6, sceneTitleSize:9, coverTitleSize:15, lineGap:1, sceneGap:1.5,
   bands: {
     header: [{ id: 'hl', content: 'chapter', custom: '' }, { id: 'hc', content: 'quest', custom: '' }, { id: 'hr', content: 'printedAt', custom: '' }],
     footer: [{ id: 'fl', content: 'version', custom: '' }, { id: 'fc', content: 'none', custom: '' }, { id: 'fr', content: 'page', custom: '' }],
   },
 }
-const APP_VERSION = 'v0.6.0'
+const APP_VERSION = 'v0.7.0'
 const TYPE_FILTERS = ['aq','lq','hq','wq','eq','iq','other']
+const NATION_ORDER = ['mondstadt','liyue','inazuma','sumeru','fontaine','natlan','nodkrai','snezhnaya','traveler','unknown']
 const REGION_MILESTONES:Record<string,{ nation:string; version:string; date:string; label:string }> = {
   '1.0':{ nation:'mondstadt',version:'1.0',date:'2020-09-28',label:'蒙德与璃月' },
   '2.0':{ nation:'inazuma',version:'2.0',date:'2021-07-21',label:'稻妻' },
@@ -64,6 +64,9 @@ const REGION_MILESTONES:Record<string,{ nation:string; version:string; date:stri
   '7.0':{ nation:'snezhnaya',version:'7.0',date:'2026-08-12',label:'至冬' },
 }
 const chapterFamily = (item:CatalogItem) => item.chapter.zh.match(/^(第[^ ]+章|空月之歌)/)?.[1] || item.chapter.zh || `${item.nation}:${item.version}`
+const chineseNumber=(raw='')=>{ const direct=Number(raw);if(Number.isFinite(direct))return direct;const digits:Record<string,number>={零:0,一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9,十:10};if(raw==='十')return 10;if(raw.startsWith('十'))return 10+(digits[raw[1]]||0);if(raw.endsWith('十'))return (digits[raw[0]]||0)*10;return digits[raw]||0 }
+const narrativeOrder=(item:CatalogItem)=>{ const chapter=item.chapter.zh.match(/第([^章 ]+)章/)?.[1]||'';const act=item.chapter.zh.match(/第([^幕 ]+)幕/)?.[1]||'';return chineseNumber(chapter)*100+chineseNumber(act) }
+const chronologicalSort=(a:CatalogItem,b:CatalogItem)=>NATION_ORDER.indexOf(a.nation)-NATION_ORDER.indexOf(b.nation)||narrativeOrder(a)-narrativeOrder(b)||a.id-b.id
 
 function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(() => {
@@ -177,9 +180,11 @@ function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: Catalog
   const [versions, setVersions] = useSessionState<string[]>('teyvat:catalog:versions', [])
   const [sort, setSort] = useSessionState<'version' | 'nation' | 'type' | 'id'>('teyvat:catalog:sort', 'version')
   const [catalogView,setCatalogView] = useSessionState<'cards'|'journey'>('teyvat:catalog:view','cards')
+  const [openPopover,setOpenPopover] = useState<string|null>(null)
   const [limit, setLimit] = useSessionState('teyvat:catalog:limit', 60)
   const [guideVisible, setGuideVisible] = useState(() => settings.guideCatalog && localStorage.getItem('teyvat:catalog-guide:v1') !== 'done')
   useEffect(() => { if (guideRequest) setGuideVisible(true) }, [guideRequest])
+  useEffect(()=>{ const close=(event:PointerEvent)=>{ if(!(event.target as HTMLElement).closest('[data-catalog-popover]'))setOpenPopover(null) };const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setOpenPopover(null)};document.addEventListener('pointerdown',close);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',escape)} },[])
   useEffect(() => {
     const saved = Number(sessionStorage.getItem('teyvat:catalog:scroll') || 0)
     requestAnimationFrame(() => scrollTo(0, saved))
@@ -216,36 +221,51 @@ function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: Catalog
       {guideVisible && <aside className="catalog-guide-board"><Info size={20} /><div><strong>从目录开始</strong><p>筛选项可以多选；排序在结果栏右侧。也可以切换“旅行历程”，按版本浏览剧情主干与支线。</p></div><button onClick={() => { localStorage.setItem('teyvat:catalog-guide:v1','done'); setGuideVisible(false) }}><X size={16} />知道了</button></aside>}
       <label className="catalog-search"><Search size={18} /><input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(60) }} placeholder="搜索任务、章幕或 ID" />{query && <button onClick={() => { setQuery(''); setLimit(60) }}><X size={15} /></button>}</label>
       <div className="filter-row">
-        <MultiFilter icon={<BookOpenText size={15}/>} label="任务类型" values={types} onChange={(next)=>{setTypes(next);setLimit(60)}} options={TYPE_FILTERS.map((key)=>[key,TYPE_NAMES[key]])}/>
-        <MultiFilter icon={<Snowflake size={15}/>} label="国家地区" values={nations} onChange={(next)=>{setNations(next);setLimit(60)}} options={Object.entries(NATION_NAMES)}/>
-        <MultiFilter icon={<Clock3 size={15}/>} label="发布版本" values={versions} onChange={(next)=>{setVersions(next);setLimit(60)}} options={[...data.versions.map((v)=>[v,`v${v}`]),['unknown','待考证']]}/>
-        {(query || types.length || nations.length || versions.length) && <button className="reset-filters" onClick={resetFilters}><RotateCcw size={14} />清除筛选</button>}
+        <MultiFilter id="types" open={openPopover==='types'} onOpen={()=>setOpenPopover(openPopover==='types'?null:'types')} icon={<BookOpenText size={15}/>} label="任务类型" values={types} onChange={(next)=>{setTypes(next);setLimit(60)}} options={TYPE_FILTERS.map((key)=>[key,TYPE_NAMES[key]])}/>
+        <MultiFilter id="nations" open={openPopover==='nations'} onOpen={()=>setOpenPopover(openPopover==='nations'?null:'nations')} icon={<Snowflake size={15}/>} label="国家地区" values={nations} onChange={(next)=>{setNations(next);setLimit(60)}} options={Object.entries(NATION_NAMES)}/>
+        <MultiFilter id="versions" open={openPopover==='versions'} onOpen={()=>setOpenPopover(openPopover==='versions'?null:'versions')} icon={<Clock3 size={15}/>} label="发布版本" values={versions} onChange={(next)=>{setVersions(next);setLimit(60)}} options={[...data.versions.map((v)=>[v,`v${v}`]),['unknown','待考证']]}/>
+        {Boolean(query || types.length || nations.length || versions.length) && <button className="reset-filters" onClick={resetFilters}><RotateCcw size={14} />清除筛选</button>}
       </div>
-      <div className="catalog-result-line"><span><strong>{items.length}</strong> 个任务 <small>{sync.checking ? '检查更新中' : sync.added || sync.modified ? `新增 ${sync.added} · 修订 ${sync.modified}` : sync.checkedAt}</small></span><label className="catalog-sort"><SlidersHorizontal size={14}/><span>排序</span><select value={sort} onChange={(event)=>setSort(event.target.value as typeof sort)}><option value="version">按版本</option><option value="nation">按国家</option><option value="type">按类型</option><option value="id">按任务 ID</option></select><ChevronDown size={13}/></label></div>
+      <div className="catalog-result-line"><span><strong>{items.length}</strong> 个任务 <small>{sync.checking ? '检查更新中' : sync.added || sync.modified ? `新增 ${sync.added} · 修订 ${sync.modified}` : sync.checkedAt}</small></span><SingleFilter id="sort" open={openPopover==='sort'} onOpen={()=>setOpenPopover(openPopover==='sort'?null:'sort')} icon={<SlidersHorizontal size={14}/>} label="排序" value={sort} onChange={(value)=>{setSort(value as typeof sort);setOpenPopover(null)}} options={[["version","按版本"],["nation","按国家"],["type","按类型"],["id","按任务 ID"]]}/></div>
     </section>}
     {catalogView === 'cards' && <section className="catalog-grid">
       {items.slice(0, limit).map((item) => <button className="catalog-card" key={item.id} onClick={() => onOpen(item)}>
         <div className="card-top"><span className={`type-badge type-${item.type}`}>{TYPE_NAMES[item.type] || '其他'}</span><span className="version-badge">{item.version ? `v${item.version}` : '—'} · #{item.id}</span></div>
         <h2>{item.title.zh}</h2><h3>{item.title.en}</h3>
-        <div className="card-context"><span>{NATION_NAMES[item.nation] || '地区待考'}</span>{item.chapter.zh && <strong>{item.chapter.zh}</strong>}<span>{item.type==='hq' ? '多结局分支' : `${item.chapterCount} Chapters`}</span></div>
+        {(item.type==='lq'||item.type==='hq')&&item.imageTitle.zh&&<div className="character-chapter"><span>{item.imageTitle.zh}</span><strong>{item.chapter.zh||'章名待考'}</strong></div>}
+        <div className="card-context"><span>{NATION_NAMES[item.nation] || '地区待考'}</span>{item.type!=='lq'&&item.type!=='hq'&&item.chapter.zh && <strong>{item.chapter.zh}</strong>}<span>{item.type==='hq' ? `${item.chapterCount} 个剧情节点` : `${item.chapterCount} Chapters`}</span></div>
         {item.type === 'aq' && <p className="act-summary">{chapterFamily(item)}已收录 {actCounts.get(chapterFamily(item)) || 1} 幕</p>}
       </button>)}
     </section>}
     {catalogView === 'cards' && items.length > limit && <button className="load-more" onClick={() => setLimit((v) => v + 60)}>再显示 {Math.min(60, items.length - limit)} 个</button>}
     {catalogView === 'cards' && !items.length && <Empty title="没有符合条件的任务" />}
-    {catalogView === 'journey' && <JourneyTimeline nodes={timeline} hangouts={data.items.filter((item)=>item.type==='hq')} onOpen={onOpen}/>}
+    {catalogView === 'journey' && <JourneyTimeline nodes={timeline} items={data.items.filter((item)=>item.version&&!item.hidden&&!item.unreleased)} onOpen={onOpen}/>}
   </main>
 }
 
-function MultiFilter({ icon,label,values,onChange,options }:{ icon:React.ReactNode;label:string;values:string[];onChange:(next:string[])=>void;options:string[][] }) {
+function MultiFilter({ id,open,onOpen,icon,label,values,onChange,options }:{ id:string;open:boolean;onOpen:()=>void;icon:React.ReactNode;label:string;values:string[];onChange:(next:string[])=>void;options:string[][] }) {
   const toggle=(value:string)=>onChange(values.includes(value)?values.filter((item)=>item!==value):[...values,value])
-  return <details className="multi-filter"><summary>{icon}<span>{label}</span><strong>{values.length ? `已选 ${values.length}` : '全部'}</strong><ChevronDown size={13}/></summary><div><header><b>{label}</b>{values.length>0&&<button onClick={()=>onChange([])}>清空</button>}</header>{options.map(([value,text])=><label key={value}><input type="checkbox" checked={values.includes(value)} onChange={()=>toggle(value)}/><span>{values.includes(value)&&<Check size={11}/>}</span>{text}{value==='hq'&&<small>Honey</small>}</label>)}</div></details>
+  return <div className={`multi-filter ${open?'open':''}`} data-catalog-popover={id}><button className="filter-trigger" onClick={onOpen}>{icon}<span>{label}</span><strong>{values.length ? `已选 ${values.length}` : '全部'}</strong><ChevronDown size={13}/></button>{open&&<div className="filter-popover"><header><b>{label}</b>{values.length>0&&<button onClick={()=>onChange([])}>清空</button>}</header>{options.map(([value,text])=><label key={value}><input type="checkbox" checked={values.includes(value)} onChange={()=>toggle(value)}/><span>{values.includes(value)&&<Check size={11}/>}</span>{text}{value==='hq'&&<small>Honey</small>}</label>)}</div>}</div>
 }
 
-function JourneyTimeline({ nodes,hangouts,onOpen }:{ nodes:Array<{version:string;items:CatalogItem[];archon:CatalogItem[];stories:CatalogItem[];world:CatalogItem[];events:CatalogItem[];milestone?:{nation:string;version:string;date:string;label:string}}>;hangouts:CatalogItem[];onOpen:(item:CatalogItem)=>void }) {
-  const visible=nodes.filter((node)=>node.milestone||node.archon.length||node.stories.length)
-  return <section className="journey-timeline"><header><div><span>2020 — 2026</span><h2>提瓦特剧情树</h2><p>主干为国家与魔神任务；传说任务作为人物支线，世界与活动任务收拢为版本簇。</p></div>{hangouts.length>0&&<aside><b>邀约事件图鉴</b><strong>{hangouts.length}</strong><small>当前可检索章节 · 版本日期待补全</small></aside>}</header><div className="timeline-scroll"><div className="timeline-track">{visible.map((node)=><article className={node.milestone?'timeline-node milestone':'timeline-node'} key={node.version}><div className="version-mark"><b>v{node.version}</b>{node.milestone&&<><strong>{node.milestone.label}</strong><time>{node.milestone.date}</time></>}</div><div className="timeline-branches">{node.archon.map((item)=><button className="timeline-archon" onClick={()=>onOpen(item)} key={item.id}><small>{item.chapter.zh}</small><strong>{item.title.zh}</strong><span>{item.chapterCount} Chapters</span></button>)}{node.stories.length>0&&<div className="timeline-cluster story"><b>传说任务</b><span>{node.stories.length} 项</span>{node.stories.slice(0,2).map((item)=><button onClick={()=>onOpen(item)} key={item.id}>{item.title.zh}</button>)}</div>}{(node.world.length>0||node.events.length>0)&&<div className="timeline-cluster minor"><b>同期枝叶</b><span>世界 {node.world.length} · 活动 {node.events.length}</span></div>}</div></article>)}</div></div></section>
+function SingleFilter({ id,open,onOpen,icon,label,value,onChange,options }:{id:string;open:boolean;onOpen:()=>void;icon:React.ReactNode;label:string;value:string;onChange:(value:string)=>void;options:string[][]}) { const current=options.find(([key])=>key===value)?.[1]||'';return <div className={`multi-filter single-filter ${open?'open':''}`} data-catalog-popover={id}><button className="filter-trigger" onClick={onOpen}>{icon}<span>{label}</span><strong>{current}</strong><ChevronDown size={13}/></button>{open&&<div className="filter-popover">{options.map(([key,text])=><button className={key===value?'selected':''} onClick={()=>onChange(key)} key={key}><span>{key===value&&<Check size={12}/>}</span>{text}</button>)}</div>}</div> }
+
+function JourneyTimeline({ nodes,items,onOpen }:{ nodes:Array<{version:string;milestone?:{nation:string;version:string;date:string;label:string}}>;items:CatalogItem[];onOpen:(item:CatalogItem)=>void }) {
+  const [mode,setMode]=useState<'version'|'nation'>('version');const [collapsed,setCollapsed]=useState<Set<string>>(new Set());const [position,setPosition]=useState(0)
+  const topRef=useRef<HTMLDivElement>(null);const bodyRef=useRef<HTMLDivElement>(null);const syncing=useRef(false)
+  const groups=useMemo(()=>{ if(mode==='version')return [...new Set(items.map((item)=>item.version).filter(Boolean) as string[])].sort((a,b)=>Number(a.replace('.',''))-Number(b.replace('.',''))).map((version)=>({key:`v-${version}`,label:`v${version}`,milestone:nodes.find((node)=>node.version===version)?.milestone,items:items.filter((item)=>item.version===version).sort(chronologicalSort)}));return NATION_ORDER.map((nation)=>({key:`n-${nation}`,label:NATION_NAMES[nation],milestone:undefined,items:items.filter((item)=>item.nation===nation).sort((a,b)=>Number(a.version?.replace('.','')||0)-Number(b.version?.replace('.','')||0)||narrativeOrder(a)-narrativeOrder(b)||a.id-b.id)})).filter((group)=>group.items.length) },[items,mode,nodes])
+  const sync=(source:'top'|'body')=>{if(syncing.current)return;syncing.current=true;const from=source==='top'?topRef.current:bodyRef.current;const to=source==='top'?bodyRef.current:topRef.current;if(from){const ratio=from.scrollWidth>from.clientWidth?from.scrollLeft/(from.scrollWidth-from.clientWidth):0;if(to)to.scrollLeft=(to.scrollWidth-to.clientWidth)*ratio;setPosition(Math.round(ratio*1000))}requestAnimationFrame(()=>{syncing.current=false})}
+  const seek=(value:number,smooth=false)=>{const ratio=value/1000;const behavior:ScrollBehavior=smooth?'smooth':'auto';const body=bodyRef.current;const top=topRef.current;if(body)body.scrollTo({left:(body.scrollWidth-body.clientWidth)*ratio,behavior});if(top)top.scrollTo({left:(top.scrollWidth-top.clientWidth)*ratio,behavior});setPosition(value)}
+  const jump=(index:number)=>seek(groups.length>1?Math.round(index/(groups.length-1)*1000):0,true)
+  const toggle=(key:string)=>setCollapsed((previous)=>{const next=new Set(previous);next.has(key)?next.delete(key):next.add(key);return next})
+  return <section className="journey-timeline"><header><div><span>2020 — 2026</span><h2>提瓦特剧情树</h2><p>国家与魔神任务构成主干；传说、邀约、世界及活动任务都可展开进入。</p></div><div className="journey-mode"><button className={mode==='version'?'active':''} onClick={()=>setMode('version')}>按版本</button><button className={mode==='nation'?'active':''} onClick={()=>setMode('nation')}>按国家</button></div></header>
+    <nav className="timeline-overview" ref={topRef} onScroll={()=>sync('top')} aria-label="旅行历程快速导航"><div className="timeline-overview-track">{groups.map((group,index)=><button onClick={()=>jump(index)} key={group.key}><small>{group.label}</small><strong>{group.milestone?.label||[...new Set(group.items.map((item)=>NATION_NAMES[item.nation]))].slice(0,2).join(' · ')}</strong></button>)}</div></nav>
+    <div className="timeline-scroll" ref={bodyRef} onScroll={()=>sync('body')}><div className="timeline-track">{groups.map((group)=><article className={group.milestone?'timeline-node milestone':'timeline-node'} key={group.key}><div className="version-mark"><b>{group.label}</b>{group.milestone&&<><strong>{group.milestone.label}</strong><time>{group.milestone.date}</time></>}</div><div className="timeline-branches">{[...new Set(group.items.map((item)=>item.nation))].sort((a,b)=>NATION_ORDER.indexOf(a)-NATION_ORDER.indexOf(b)).map((nation)=>{const key=`${group.key}:${nation}`;const nationItems=group.items.filter((item)=>item.nation===nation);const isCollapsed=collapsed.has(key);return <section className={`timeline-country-group ${isCollapsed?'collapsed':''}`} key={key}><button className="country-group-heading" onClick={()=>toggle(key)}><span>{NATION_NAMES[nation]}</span><small>{nationItems.length} 项</small><ChevronDown size={14}/></button><div className="country-group-reveal"><div>{['aq','lq','hq','wq','eq'].map((type)=><TimelineTaskGroup type={type} items={nationItems.filter((item)=>item.type===type)} onOpen={onOpen} key={type}/>)}</div></div></section>})}</div></article>)}</div></div>
+    <div className="timeline-scrubber"><span>1.0</span><input aria-label="时间线位置" type="range" min="0" max="1000" value={position} onChange={(event)=>seek(Number(event.target.value))}/><span>最新</span></div><button className="timeline-latest" onClick={()=>seek(1000)}><ChevronsRight size={17}/><span>最新版本</span></button>
+  </section>
 }
+
+function TimelineTaskGroup({type,items,onOpen}:{type:string;items:CatalogItem[];onOpen:(item:CatalogItem)=>void}) { if(!items.length)return null;return <details className={`timeline-task-group type-${type}`} open={type==='aq'||type==='lq'||type==='hq'}><summary><b>{TYPE_NAMES[type]}</b><span>{items.length}</span><ChevronDown size={12}/></summary><div>{items.map((item)=><button onClick={()=>onOpen(item)} key={item.id}><small>{item.imageTitle.zh||item.chapter.zh||`v${item.version}`}</small><strong>{item.title.zh}</strong>{item.chapter.zh&&<span>{item.chapter.zh}</span>}</button>)}</div></details> }
 
 function Empty({ title }: { title: string }) { return <div className="empty"><FileText size={28} /><h2>{title}</h2></div> }
 
@@ -257,14 +277,16 @@ function LanguagePicker({ value, onChange }: { value: LanguageCode[]; onChange: 
   return <div className="language-picker"><div className="language-picked">{value.map((code, index) => <span key={code}><b>{index + 1}</b>{languageInfo(code).label}</span>)}</div><div className="language-list">{LANGUAGE_OPTIONS.map((language) => <label className={value.includes(language.code) ? 'active' : ''} key={language.code}><input type="checkbox" checked={value.includes(language.code)} disabled={!value.includes(language.code) && value.length >= 3} onChange={() => toggle(language.code)} /><span>{value.indexOf(language.code) + 1 || ''}</span><strong>{language.label}</strong><small>{language.code}</small></label>)}</div></div>
 }
 
-function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, onOpenBasket, basketSources, basketLines, guideRequest }: {
+function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, onOpenBasket, onOpenPrint, basketSources, basketLines, guideRequest }: {
   data: ChapterData; settings: AppSettings; setSettings: (s: AppSettings) => void; onBack: () => void;
-  onQueue: (selection: Set<string>, quest: Quest, scenes: Scene[]) => void; onQueueChapter:(data:ChapterData) => void; onOpenBasket: () => void; basketSources: number; basketLines: number; guideRequest: number
+  onQueue: (selection: Set<string>, quest: Quest, scenes: Scene[]) => void; onQueueChapter:(data:ChapterData) => void; onOpenBasket: () => void; onOpenPrint:()=>void; basketSources: number; basketLines: number; guideRequest: number
 }) {
   const [questId, setQuestId] = useState(data.quests[0]?.id)
   const [sceneKeys, setSceneKeys] = useState<Set<string>>(new Set())
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
+  const [composing,setComposing] = useState(false)
+  const deferredQuery = useDeferredValue(composing ? '' : query)
   const [searchMode, setSearchMode] = useState<'locate' | 'filter'>('locate')
   const [matchIndex, setMatchIndex] = useState(0)
   const [traveler, setTraveler] = useState<Traveler>('aether')
@@ -319,15 +341,16 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
   }
   const speakerScenes = useMemo(() => activeQuest.scenes.map((scene) => ({ ...scene, lines: scene.lines.filter((line) => speakerKeys.has(speakerKey(line))) })), [activeQuest, speakerKeys])
   const baseScenes = useMemo(() => filterScenes(speakerScenes, sceneKeys, '', traveler), [speakerScenes, sceneKeys, traveler])
-  const filteredScenes = useMemo(() => filterScenes(speakerScenes, sceneKeys, query, traveler), [speakerScenes, sceneKeys, query, traveler])
+  const filteredScenes = useMemo(() => filterScenes(speakerScenes, sceneKeys, deferredQuery, traveler), [speakerScenes, sceneKeys, deferredQuery, traveler])
   const scenes = searchMode === 'filter' ? filteredScenes : baseScenes
   const matchKeys = useMemo(() => filteredScenes.flatMap((scene) => scene.lines.map((line) => line.key)), [filteredScenes])
-  useEffect(() => setMatchIndex(0), [query, searchMode, activeQuest.id])
+  const matchKeySet = useMemo(() => new Set(matchKeys),[matchKeys])
+  useEffect(() => setMatchIndex(0), [deferredQuery, searchMode, activeQuest.id])
   useEffect(() => {
-    if (searchMode !== 'locate' || !query || !matchKeys.length) return
+    if (searchMode !== 'locate' || !deferredQuery || !matchKeys.length) return
     const key = matchKeys[Math.min(matchIndex, matchKeys.length - 1)]
     requestAnimationFrame(() => document.querySelector(`[data-line-key="${CSS.escape(key)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
-  }, [matchIndex, matchKeys, query, searchMode])
+  }, [matchIndex, matchKeys, deferredQuery, searchMode])
   const visibleLineKeys = scenes.flatMap((s) => s.lines.map((l) => l.key))
   const selectedVisible = visibleLineKeys.filter((key) => selectedLines.has(key)).length
   const allVisibleSelected = Boolean(visibleLineKeys.length && selectedVisible === visibleLineKeys.length)
@@ -378,6 +401,8 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
     event.preventDefault()
     const startX = event.clientX
     const initial = [...liveLanguageWidths.current]
+    const divider = event.currentTarget
+    let pending = initial
     const update = (clientX: number) => {
       const content = scriptRef.current?.querySelector('.utterances')?.getBoundingClientRect()
       if (!content) return
@@ -385,10 +410,12 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
       const next = [...initial]
       const applied = Math.max(15 - initial[boundary], Math.min(initial[boundary + 1] - 15, delta))
       next[boundary] = initial[boundary] + applied; next[boundary + 1] = initial[boundary + 1] - applied
-      applyReaderWidths(next)
+      pending = next
+      const contentBox = scriptRef.current?.querySelector('.utterances')?.getBoundingClientRect();const scriptBox=scriptRef.current?.getBoundingClientRect()
+      if(contentBox&&scriptBox)divider.style.left=`${contentBox.left-scriptBox.left+contentBox.width*next.slice(0,boundary+1).reduce((a,b)=>a+b,0)/100}px`
     }
     const move = (next: PointerEvent) => update(next.clientX)
-    const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); setSettings({ ...settings, languageWidths:liveLanguageWidths.current, columnRatio:liveLanguageWidths.current[0] }) }
+    const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop);applyReaderWidths(pending);setSettings({ ...settings, languageWidths:pending, columnRatio:pending[0] }) }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', stop)
   }
@@ -421,7 +448,7 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
         <div className="reader-toolbar">
           <div className="view-pills">{VIEW_OPTIONS.map((v) => <button className={settings.viewMode === v.id ? 'active' : ''} onClick={() => setSettings({ ...settings, viewMode: v.id })} key={v.id}>{v.label}</button>)}</div>
           <div className="language-control"><button onClick={() => setLanguageOpen((value) => !value)}><Languages size={15} />{activeLanguages.map((lang) => languageInfo(lang).short).join(' · ')}<ChevronDown size={12} /></button>{languageOpen && <div className="language-popover"><header><strong>对照语言</strong><span>{activeLanguages.length}/3</span></header><LanguagePicker value={activeLanguages} onChange={(languages) => setSettings({ ...settings, languages })} /></div>}</div>
-          <div className="search-tools"><label className="reader-search"><Search size={15} /><input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && searchMode === 'locate' && matchKeys.length) setMatchIndex((value) => (value + 1) % matchKeys.length) }} placeholder="搜角色或台词" />{query && <button onClick={() => setQuery('')}><X size={13} /></button>}</label><select aria-label="搜索方式" value={searchMode} onChange={(e) => setSearchMode(e.target.value as 'locate' | 'filter')}><option value="locate">定位</option><option value="filter">筛选</option></select>{query && searchMode === 'locate' && <div className="match-nav"><span>{matchKeys.length ? matchIndex + 1 : 0}/{matchKeys.length}</span><button disabled={!matchKeys.length} onClick={() => setMatchIndex((value) => (value - 1 + matchKeys.length) % matchKeys.length)}><ArrowUp size={12} /></button><button disabled={!matchKeys.length} onClick={() => setMatchIndex((value) => (value + 1) % matchKeys.length)}><ArrowDown size={12} /></button></div>}</div>
+          <div className="search-tools"><label className="reader-search"><Search size={15} /><input value={query} onCompositionStart={()=>setComposing(true)} onCompositionEnd={(e)=>{setComposing(false);setQuery(e.currentTarget.value)}} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (!e.nativeEvent.isComposing && e.key === 'Enter' && searchMode === 'locate' && matchKeys.length) setMatchIndex((value) => (value + 1) % matchKeys.length) }} placeholder="搜角色或台词" />{query && <button onClick={() => setQuery('')}><X size={13} /></button>}</label><select aria-label="搜索方式" value={searchMode} onChange={(e) => setSearchMode(e.target.value as 'locate' | 'filter')}><option value="locate">定位</option><option value="filter">筛选</option></select>{deferredQuery && searchMode === 'locate' && <div className="match-nav"><span>{matchKeys.length ? matchIndex + 1 : 0}/{matchKeys.length}</span><button disabled={!matchKeys.length} onClick={() => setMatchIndex((value) => (value - 1 + matchKeys.length) % matchKeys.length)}><ArrowUp size={12} /></button><button disabled={!matchKeys.length} onClick={() => setMatchIndex((value) => (value + 1) % matchKeys.length)}><ArrowDown size={12} /></button></div>}</div>
           <div className="role-filter"><button className={speakerKeys.size < availableSpeakers.length ? 'filtered' : ''} onClick={() => setRoleFilterOpen((value) => !value)}><Filter size={14} />角色 {speakerKeys.size}/{availableSpeakers.length}<ChevronDown size={12} /></button>{roleFilterOpen && <div className="role-filter-popover"><header><strong>只显示这些角色</strong><button onClick={() => setRoleFilterOpen(false)}><X size={17} /></button></header><div className="featured-roles">{travelerSpeaker && <label><input type="checkbox" checked={speakerKeys.has(travelerSpeaker.key)} onChange={() => toggleSpeaker(travelerSpeaker.key)} /><span className="checkmark">{speakerKeys.has(travelerSpeaker.key) && <Check size={12} />}</span><div><strong>旅行者</strong><select value={traveler} onChange={(e) => setTraveler(e.target.value as Traveler)} onClick={(e) => e.stopPropagation()}><option value="aether">空 · Aether</option><option value="lumine">荧 · Lumine</option></select></div></label>}{paimonSpeaker && <label><input type="checkbox" checked={speakerKeys.has(paimonSpeaker.key)} onChange={() => toggleSpeaker(paimonSpeaker.key)} /><span className="checkmark">{speakerKeys.has(paimonSpeaker.key) && <Check size={12} />}</span><div><strong>{paimonSpeaker.label}</strong><small>{paimonSpeaker.sub}</small></div></label>}</div><div className="role-filter-actions"><span>其他角色</span><button onClick={() => setSpeakerKeys(new Set(availableSpeakers.map((speaker) => speaker.key)))}>全选</button><button onClick={() => setSpeakerKeys(new Set())}>清空</button></div><div className="role-filter-list">{regularSpeakers.map((speaker) => <label key={speaker.key}><input type="checkbox" checked={speakerKeys.has(speaker.key)} onChange={() => toggleSpeaker(speaker.key)} /><span className="checkmark">{speakerKeys.has(speaker.key) && <Check size={11} />}</span><span><strong>{speaker.label}</strong><small>{speaker.sub}</small></span></label>)}</div></div>}</div>
           <button className={selectionMode ? 'selection-toggle active' : 'selection-toggle'} onClick={() => setSelectionMode((v) => !v)}><MousePointer2 size={16} /><span>{selectionMode ? '退出选句' : '选择台词'}</span></button>
         </div>
@@ -429,12 +456,12 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
         <div ref={scriptRef} data-language-count={activeLanguages.length} className={`script script-${settings.viewMode} ${selectionMode ? 'is-selecting' : ''}`} style={{ '--reader-columns':languageWidths.map((width) => `minmax(0,${width}fr)`).join(' ') } as React.CSSProperties}>
           {settings.viewMode === 'parallel' && activeLanguages.length > 1 && activeLanguages.slice(0,-1).map((_, boundary) => <button key={boundary} className="reader-column-divider" onPointerDown={(event) => resizeReaderColumns(event,boundary)} onDoubleClick={() => { const equal = Array(activeLanguages.length).fill(100 / activeLanguages.length); applyReaderWidths(equal); setSettings({ ...settings, languageWidths:equal, columnRatio:equal[0] }) }} title="拖动调整相邻语言栏宽；双击恢复均分"><GripVertical size={14} /></button>)}
           <div className="script-meta"><span>{scenes.length} 个场景 · {visibleLineKeys.length} 句</span></div>
-          {scenes.map((scene, sceneIndex) => <SceneBlock key={scene.key} scene={scene} sceneIndex={sceneIndex} mode={settings.viewMode} languages={activeLanguages} traveler={traveler} selected={selectedLines} toggle={toggleLine} selecting={selectionMode} query={searchMode === 'locate' ? query : ''} matches={new Set(matchKeys)} focusedKey={searchMode === 'locate' ? matchKeys[matchIndex] : undefined} showGuide={settings.guideScenes !== false} />)}
+          {scenes.map((scene, sceneIndex) => <SceneBlock key={scene.key} scene={scene} sceneIndex={sceneIndex} mode={settings.viewMode} languages={activeLanguages} traveler={traveler} selected={selectedLines} toggle={toggleLine} selecting={selectionMode} query={searchMode === 'locate' ? deferredQuery : ''} matches={matchKeySet} focusedKey={searchMode === 'locate' ? matchKeys[matchIndex] : undefined} showGuide={settings.guideScenes !== false} />)}
           {!scenes.length && <Empty title="没有可显示的台词" />}
         </div>
       </section>
     </div>
-    <div className="basket-dock"><button disabled={!basketSources} onClick={onOpenBasket}><span className="basket-icon"><ShoppingBasket size={22} />{basketSources > 0 && <b>{basketSources}</b>}</span><span className="basket-copy"><strong>选稿池</strong><small>{basketSources ? `${basketSources} 个任务段 · ${basketLines} 句，点击整理` : '选中台词后加入这里'}</small></span><span className="basket-open">查看内容<ArrowRight size={17} /></span></button></div>
+    <div className="basket-dock"><button className="basket-summary" disabled={!basketSources} onClick={onOpenBasket}><span className="basket-icon"><ShoppingBasket size={22} />{basketSources > 0 && <b>{basketSources}</b>}</span><span className="basket-copy"><strong>选稿池</strong><small>{basketSources ? `${basketSources} 个任务段 · ${basketLines} 句，点击查看内容` : '选中台词后加入这里'}</small></span></button><button className="basket-print" disabled={!basketSources} onClick={onOpenPrint}><Printer size={17}/><span>进入打印排版</span><ArrowRight size={17}/></button></div>
     {guideOpen && <ReaderGuide step={guideStep} onStep={setGuideStep} onClose={closeGuide} />}
   </main>
 }
@@ -446,6 +473,11 @@ function SceneBlock({ scene, sceneIndex, mode, languages, traveler, selected, to
   let index = 0
   while (index < scene.lines.length) {
     const line = scene.lines[index]
+    if (line.branchGroupId) {
+      const start=index;const group:DialogueLine[]=[];while(index<scene.lines.length&&scene.lines[index].branchGroupId===line.branchGroupId)group.push(scene.lines[index++]);const total=line.branchTotal||new Set(group.map((item)=>item.branchIndex)).size;const divergent=group.some((item)=>item.branchRole==='response')
+      blocks.push(<section className={`choice-group ${divergent?'choice-divergent':'choice-convergent'}`} key={`branch:${line.branchGroupId}`}><header><GitFork size={16}/><div><strong>旅行者选项</strong><small>{total} 个选项 · {divergent?'每条分支显示其专属回应':'选择后立即汇入共同后续'}</small></div></header><div className="branch-paths">{Array.from({length:total},(_,branchIndex)=>{const path=group.filter((item)=>item.branchIndex===branchIndex);return <section className={`branch-path branch-tone-${branchIndex%4}`} key={branchIndex}><div className="branch-path-label"><b>{branchIndex+1}/{total}</b><span>{divergent?'分支路径':'可选说法'}</span></div>{path.map((item,pathIndex)=><DialogueRow key={item.key} line={item} index={start+pathIndex} optionIndex={pathIndex===0?branchIndex:undefined} optionTotal={pathIndex===0?total:undefined} mode={mode} languages={languages} traveler={traveler} checked={selected.has(item.key)} toggle={()=>toggle(item.key)} selecting={selecting} query={query} match={!query||matches.has(item.key)} focused={item.key===focusedKey}/>)}</section>})}</div></section>)
+      if(index<scene.lines.length)blocks.push(<div className="common-story-marker" key={`common:${line.branchGroupId}`}><span>以上 {total} 条路径在此汇合</span></div>);continue
+    }
     if (line.kind !== 'choice') {
       blocks.push(<DialogueRow key={line.key} line={line} index={index} mode={mode} languages={languages} traveler={traveler} checked={selected.has(line.key)} toggle={() => toggle(line.key)} selecting={selecting} query={query} match={!query || matches.has(line.key)} focused={line.key === focusedKey} />)
       index++; continue
@@ -453,8 +485,7 @@ function SceneBlock({ scene, sceneIndex, mode, languages, traveler, selected, to
     const start = index; const choices: DialogueLine[] = []
     while (index < scene.lines.length && scene.lines[index].kind === 'choice') choices.push(scene.lines[index++])
     if (choices.length === 1) blocks.push(<DialogueRow key={choices[0].key} line={choices[0]} index={start} mode={mode} languages={languages} traveler={traveler} checked={selected.has(choices[0].key)} toggle={() => toggle(choices[0].key)} selecting={selecting} query={query} match={!query || matches.has(choices[0].key)} focused={choices[0].key === focusedKey} />)
-    else blocks.push(<section className="choice-group" key={`choices:${line.key}`}><header><GitFork size={16} /><div><strong>旅行者选项</strong><small>{choices.length} 个可选说法 · 后续内容相同或归属未确认</small></div></header>{choices.map((choice, option) => <DialogueRow key={choice.key} line={choice} index={start + option} optionIndex={option} optionTotal={choices.length} mode={mode} languages={languages} traveler={traveler} checked={selected.has(choice.key)} toggle={() => toggle(choice.key)} selecting={selecting} query={query} match={!query || matches.has(choice.key)} focused={choice.key === focusedKey} />)}</section>)
-    if (choices.length > 1 && index < scene.lines.length) blocks.push(<div className="common-story-marker" key={`common:${line.key}`}><span>以下为 {choices.length} 个选项的共通后续</span></div>)
+    else { const divergent=new Set(choices.map((choice)=>choice.nextNodeId).filter(Boolean)).size>1;blocks.push(<section className={`choice-group ${divergent?'choice-divergent':'choice-convergent'}`} key={`choices:${line.key}`}><header><GitFork size={16} /><div><strong>旅行者选项</strong><small>{choices.length} 个可选说法 · {divergent?'各选项通向不同回应':'选择后汇入共同后续'}</small></div></header>{choices.map((choice, option) => <DialogueRow key={choice.key} line={choice} index={start + option} optionIndex={option} optionTotal={choices.length} mode={mode} languages={languages} traveler={traveler} checked={selected.has(choice.key)} toggle={() => toggle(choice.key)} selecting={selecting} query={query} match={!query || matches.has(choice.key)} focused={choice.key === focusedKey} />)}</section>);if(!divergent&&index<scene.lines.length)blocks.push(<div className="common-story-marker" key={`common:${line.key}`}><span>以下为 {choices.length} 个选项的共同后续</span></div>)}
   }
   return <section className="scene-block" data-scene-key={scene.key}><header><span>SCENE {String(sceneIndex + 1).padStart(2,'0')}</span><div><h3>{localized(scene.title, languages[0])}</h3>{languages.slice(1).map((lang) => <p title={localized(scene.title,lang)} key={lang}>{localized(scene.title, lang)}</p>)}</div><em>{scene.lines.length} 句</em></header>{tipVisible && <aside className="scene-lead"><Info size={14} /><div><strong>{scene.description.zh ? '本节提示' : '场景阅读提示'}</strong><p>{scene.description.zh ? localized(scene.description,languages[0]) : '选项会合并为分支组；未能由数据确认差异的后续内容统一标为“共通剧情”。'}</p></div><button aria-label="关闭本场景提示" onClick={() => { sessionStorage.setItem(guideKey,'done'); setTipVisible(false) }}><X size={14} /></button></aside>}{blocks}</section>
 }
@@ -511,6 +542,8 @@ function PrintStudio({ bundles, setBundles, languages, traveler = 'aether', sett
   const [exporting, setExporting] = useState(false)
   const [exportProgress, setExportProgress] = useState({ value: 0, label: '' })
   const [printedAt] = useState(() => new Date().toLocaleString('zh-CN', { hour12: false }))
+  const [advancedOpen,setAdvancedOpen] = useState(false)
+  const [pageOpen,setPageOpen] = useState(false)
   const bands = settings.bands || DEFAULT_PRINT.bands
   const count = bundles.reduce((total, bundle) => total + bundle.scenes.reduce((n, scene) => n + scene.lines.length, 0), 0)
   const meta = buildPrintMeta(bundles)
@@ -551,27 +584,28 @@ function PrintStudio({ bundles, setBundles, languages, traveler = 'aether', sett
     } finally { setExporting(false) }
   }
   const moveBundle = (index: number, delta: number) => { const target = index + delta; if (target < 0 || target >= bundles.length) return; const next = [...bundles]; [next[index], next[target]] = [next[target], next[index]]; setBundles(next) }
+  const [draggedBundle,setDraggedBundle] = useState<string | null>(null)
+  const moveDraggedBundle = (target:number) => { if (!draggedBundle) return; const source=bundles.findIndex((item)=>item.key===draggedBundle); if(source<0||source===target)return; const next=[...bundles];const [item]=next.splice(source,1);next.splice(target,0,item);setBundles(next) }
   const applyDensity = (density: PrintSettings['density']) => setSettings({ ...settings, density, ...(density === 'comfortable' ? { fontSize:11, speakerSize:8, numberSize:6.5, lineGap:1.5, sceneGap:2.4 } : density === 'compact' ? { fontSize:9, speakerSize:7, numberSize:6, lineGap:1, sceneGap:1.5 } : { fontSize:7.5, speakerSize:6, numberSize:5, lineGap:.45, sceneGap:.8, margin:Math.max(10,settings.margin) }) })
   return <><Modal wide title="打印与 PDF 选稿台" eyebrow={`${bundles.length} SOURCES · ${count} LINES`} onClose={onClose}>
     <div className="print-studio"><section className="print-options-panel">
-      <PrintGroup title="选稿池 · 可跨任务与章节"><div className="print-basket-list">{bundles.map((bundle, index) => <article key={bundle.key}><span>{String(index + 1).padStart(2,'0')}</span><div><strong>{bundle.quest.title.zh}</strong><small>{TYPE_NAMES[bundle.taskType || ''] || '剧情任务'} · {bundle.chapter.number.zh} · Chapter {bundle.quest.order} · {bundle.scenes.length} 场景 · {bundle.scenes.reduce((n, scene) => n + scene.lines.length, 0)} 句</small></div><button disabled={index === 0} onClick={() => moveBundle(index, -1)} aria-label="上移"><ArrowUp size={12} /></button><button disabled={index === bundles.length - 1} onClick={() => moveBundle(index, 1)} aria-label="下移"><ArrowDown size={12} /></button><button onClick={() => setBundles(bundles.filter((item) => item.key !== bundle.key))} aria-label="移除"><Trash2 size={12} /></button></article>)}</div></PrintGroup>
+      <PrintGroup title="选稿池 · 拖动实时排序"><div className="print-basket-list">{bundles.map((bundle, index) => <article draggable className={draggedBundle===bundle.key?'dragging':''} onDragStart={(event)=>{setDraggedBundle(bundle.key);event.dataTransfer.effectAllowed='move'}} onDragEnter={()=>moveDraggedBundle(index)} onDragOver={(event)=>event.preventDefault()} onDragEnd={()=>setDraggedBundle(null)} key={bundle.key}><GripVertical size={16}/><span>{String(index + 1).padStart(2,'0')}</span><div><strong>{bundle.quest.title.zh}</strong><small>{TYPE_NAMES[bundle.taskType || ''] || '剧情任务'} · {bundle.chapter.number.zh} · Chapter {bundle.quest.order} · {bundle.scenes.length} 场景 · {bundle.scenes.reduce((n, scene) => n + scene.lines.length, 0)} 句</small></div><button disabled={index === 0} onClick={() => moveBundle(index, -1)} aria-label="上移"><ArrowUp size={12} /></button><button disabled={index === bundles.length - 1} onClick={() => moveBundle(index, 1)} aria-label="下移"><ArrowDown size={12} /></button><button onClick={() => setBundles(bundles.filter((item) => item.key !== bundle.key))} aria-label="移除"><Trash2 size={12} /></button></article>)}</div></PrintGroup>
       <PrintGroup title="版式"><Segment value={['parallel','stacked'].includes(settings.layout) ? settings.layout : 'parallel'} onChange={(v) => setSettings({ ...settings, layout: v as PrintSettings['layout'] })} options={[["parallel","并列"],["stacked","上下"]]} /></PrintGroup>
       <PrintGroup title="密度预设"><Segment value={settings.density} onChange={(v) => applyDensity(v as PrintSettings['density'])} options={[["comfortable","一般 · 11pt"],["compact","紧凑 · 9pt"],["ultra","超紧凑 · 7.5pt"]]} /></PrintGroup>
       <PrintGroup title="说话人排版"><Segment value={settings.speakerLayout || 'column'} onChange={(v) => setSettings({ ...settings, speakerLayout:v as PrintSettings['speakerLayout'] })} options={[["column","独立窄列"],["inline","名字行内"]]} /></PrintGroup>
       <div className="print-grid"><PrintGroup title="纸张"><select value={settings.paper} onChange={(e) => setSettings({ ...settings, paper: e.target.value as PrintSettings['paper'] })}><option value="a4">A4</option><option value="a5">A5</option><option value="letter">Letter</option></select></PrintGroup><PrintGroup title="方向"><select value={settings.orientation} onChange={(e) => setSettings({ ...settings, orientation: e.target.value as PrintSettings['orientation'] })}><option value="portrait">纵向</option><option value="landscape">横向</option></select></PrintGroup></div>
-      <PrintGroup title={`正文字号 · ${settings.fontSize}pt`}><input type="range" min="7" max="13" value={settings.fontSize} onChange={(e) => setSettings({ ...settings, fontSize: Number(e.target.value) })} /></PrintGroup>
-      <PrintGroup title={`说话人字号 · ${settings.speakerSize ?? 7}pt`}><input type="range" min="5" max="12" step=".5" value={settings.speakerSize ?? 7} onChange={(e) => setSettings({ ...settings, speakerSize:Number(e.target.value) })} /></PrintGroup>
-      {settings.speakerLayout === 'column' && <PrintGroup title={`说话人列宽 · ${settings.speakerWidth ?? 14}mm`}><input type="range" min="8" max="24" value={settings.speakerWidth ?? 14} onChange={(e) => setSettings({ ...settings, speakerWidth:Number(e.target.value) })} /></PrintGroup>}
-      <PrintGroup title={`序号字号 · ${settings.numberSize ?? 6}pt`}><input type="range" min="4" max="10" step=".5" value={settings.numberSize ?? 6} onChange={(e) => setSettings({ ...settings, numberSize:Number(e.target.value) })} /></PrintGroup>
-      <PrintGroup title={`场景标题 · ${settings.sceneTitleSize ?? 9}pt`}><input type="range" min="6" max="16" step=".5" value={settings.sceneTitleSize ?? 9} onChange={(e) => setSettings({ ...settings, sceneTitleSize:Number(e.target.value) })} /></PrintGroup>
-      <PrintGroup title={`封面标题 · ${settings.coverTitleSize ?? 15}pt`}><input type="range" min="10" max="30" value={settings.coverTitleSize ?? 15} onChange={(e) => setSettings({ ...settings, coverTitleSize:Number(e.target.value) })} /></PrintGroup>
-      <PrintGroup title={`行间距 · ${settings.lineGap ?? 1}mm`}><input type="range" min="0" max="4" step=".25" value={settings.lineGap ?? 1} onChange={(e) => setSettings({ ...settings, lineGap:Number(e.target.value) })} /></PrintGroup>
-      <PrintGroup title={`场景间距 · ${settings.sceneGap ?? 1.5}mm`}><input type="range" min="0" max="8" step=".5" value={settings.sceneGap ?? 1.5} onChange={(e) => setSettings({ ...settings, sceneGap:Number(e.target.value) })} /></PrintGroup>
-      <PrintGroup title={`安全页边距 · ${settings.margin}mm`}><input type="range" min="8" max="24" step="2" value={settings.margin} onChange={(e) => setSettings({ ...settings, margin: Number(e.target.value) })} /><small className={settings.margin < 10 ? 'margin-warning' : 'margin-safe'}>{settings.margin < 10 ? '部分打印机可能裁切页眉页脚' : '页眉、页脚位于安全区域内'}</small></PrintGroup>
-      {settings.layout === 'parallel' && <PrintGroup title={`中外文栏宽 · ${settings.columnRatio ?? 50} / ${100 - (settings.columnRatio ?? 50)}`}><div className="ratio-setting"><input type="range" min="25" max="75" value={settings.columnRatio ?? 50} onChange={(e) => setSettings({ ...settings, columnRatio: Number(e.target.value) })} /><button onClick={() => setSettings({ ...settings, columnRatio: 50 })}><RotateCcw size={14} />恢复均分</button></div></PrintGroup>}
-      <PrintGroup title="颜色"><Segment value={settings.color} onChange={(v) => setSettings({ ...settings, color: v as PrintSettings['color'] })} options={[["full","彩色"],["accent","省墨"],["mono","黑白"]]} /></PrintGroup>
-      <div className="print-toggles"><ToggleLine label="封面" value={settings.cover} set={(v) => setSettings({ ...settings, cover: v })} /><ToggleLine label="场景标题" value={settings.sceneTitles} set={(v) => setSettings({ ...settings, sceneTitles: v })} /><ToggleLine label="说话人" value={settings.speakers} set={(v) => setSettings({ ...settings, speakers: v })} /><ToggleLine label="行号" value={settings.lineNumbers} set={(v) => setSettings({ ...settings, lineNumbers: v })} /></div>
-      <PrintBandEditor bands={bands} onChange={(next) => setSettings({ ...settings, bands: next })} />
+      <details className="print-settings-section" open={advancedOpen} onToggle={(e)=>setAdvancedOpen(e.currentTarget.open)}><summary><span><strong>高级排版</strong><small>字号、间距与栏宽</small></span><ChevronDown size={16}/></summary><div className="print-settings-grid"><PrintGroup title={`正文字号 · ${settings.fontSize}pt`}><CommitRange min={7} max={13} value={settings.fontSize} onCommit={(value) => setSettings({ ...settings, fontSize:value })} /></PrintGroup>
+      <PrintGroup title={`说话人字号 · ${settings.speakerSize ?? 7}pt`}><CommitRange min={5} max={12} step={.5} value={settings.speakerSize ?? 7} onCommit={(value) => setSettings({ ...settings, speakerSize:value })} /></PrintGroup>
+      {settings.speakerLayout === 'column' && <PrintGroup title={`说话人列宽 · ${settings.speakerWidth ?? 14}mm`}><CommitRange min={8} max={24} value={settings.speakerWidth ?? 14} onCommit={(value) => setSettings({ ...settings, speakerWidth:value })} /></PrintGroup>}
+      <PrintGroup title={`序号字号 · ${settings.numberSize ?? 6}pt`}><CommitRange min={4} max={10} step={.5} value={settings.numberSize ?? 6} onCommit={(value) => setSettings({ ...settings, numberSize:value })} /></PrintGroup>
+      <PrintGroup title={`场景标题 · ${settings.sceneTitleSize ?? 9}pt`}><CommitRange min={6} max={16} step={.5} value={settings.sceneTitleSize ?? 9} onCommit={(value) => setSettings({ ...settings, sceneTitleSize:value })} /></PrintGroup>
+      <PrintGroup title={`封面标题 · ${settings.coverTitleSize ?? 15}pt`}><CommitRange min={10} max={30} value={settings.coverTitleSize ?? 15} onCommit={(value) => setSettings({ ...settings, coverTitleSize:value })} /></PrintGroup>
+      <PrintGroup title={`行间距 · ${settings.lineGap ?? 1}mm`}><CommitRange min={0} max={4} step={.25} value={settings.lineGap ?? 1} onCommit={(value) => setSettings({ ...settings, lineGap:value })} /></PrintGroup>
+      <PrintGroup title={`场景间距 · ${settings.sceneGap ?? 1.5}mm`}><CommitRange min={0} max={8} step={.5} value={settings.sceneGap ?? 1.5} onCommit={(value) => setSettings({ ...settings, sceneGap:value })} /></PrintGroup>
+      <PrintGroup title={`安全页边距 · ${settings.margin}mm`}><CommitRange min={8} max={24} step={2} value={settings.margin} onCommit={(value) => setSettings({ ...settings, margin:value })} /><small className={settings.margin < 10 ? 'margin-warning' : 'margin-safe'}>{settings.margin < 10 ? '部分打印机可能裁切页眉页脚' : '页眉、页脚位于安全区域内'}</small></PrintGroup>
+      {settings.layout === 'parallel' && <PrintGroup title={`中外文栏宽 · ${settings.columnRatio ?? 50} / ${100 - (settings.columnRatio ?? 50)}`}><div className="ratio-setting"><CommitRange min={25} max={75} value={settings.columnRatio ?? 50} onCommit={(value) => setSettings({ ...settings, columnRatio:value })} /><button onClick={() => setSettings({ ...settings, columnRatio: 50 })}><RotateCcw size={14} />恢复均分</button></div></PrintGroup>}
+      </div></details>
+      <details className="print-settings-section" open={pageOpen} onToggle={(e)=>setPageOpen(e.currentTarget.open)}><summary><span><strong>页面元素</strong><small>颜色、标题、引入文本及页眉页脚</small></span><ChevronDown size={16}/></summary><div className="print-settings-grid"><PrintGroup title="颜色"><Segment value={settings.color} onChange={(v) => setSettings({ ...settings, color: v as PrintSettings['color'] })} options={[["full","彩色"],["accent","省墨"],["mono","黑白"]]} /></PrintGroup><div className="print-toggles"><ToggleLine label="封面" value={settings.cover} set={(v) => setSettings({ ...settings, cover: v })} /><ToggleLine label="场景标题" value={settings.sceneTitles} set={(v) => setSettings({ ...settings, sceneTitles: v })} /><ToggleLine label="场景引入文本" value={settings.sceneLeads !== false} set={(v) => setSettings({ ...settings, sceneLeads: v })} /><ToggleLine label="说话人" value={settings.speakers} set={(v) => setSettings({ ...settings, speakers: v })} /><ToggleLine label="行号" value={settings.lineNumbers} set={(v) => setSettings({ ...settings, lineNumbers: v })} /></div><PrintBandEditor bands={bands} onChange={(next) => setSettings({ ...settings, bands: next })} /></div></details>
     </section><PrintPreview bundles={bundles} languages={languages} traveler={traveler} settings={settings} setSettings={setSettings} printedAt={printedAt} /></div>
     <div className="print-footer"><div><button className="secondary-action" onClick={openNativePrint} disabled={!count || exporting}><Printer size={16} />系统打印</button><button className="primary-action" onClick={openNativePrint} disabled={!count || exporting}>{exporting ? <LoaderCircle className="spin" size={16} /> : <FileDown size={16} />}{exporting ? '正在准备…' : '保存矢量 PDF'}</button></div></div>
   </Modal>{exporting && <div className="progress-overlay"><section><span>PRINT COMPOSITOR</span><LoaderCircle className="spin" size={28} /><h3>正在准备打印稿</h3><p>{exportProgress.label}</p><div className="progress-track"><i style={{ width: `${exportProgress.value}%` }} /></div><small>{exportProgress.value}%</small></section></div>}<div className="print-only-root"><PrintDocument bundles={bundles} languages={languages} traveler={traveler} settings={settings} printedAt={printedAt} /></div></>
@@ -624,23 +658,26 @@ function PrintPreview({ bundles, languages, traveler, settings, setSettings, pri
   }, [bundles, languages, settings, printableHeight])
   const resizePrintColumns = (event: React.PointerEvent<HTMLButtonElement>, half: 'full' | 'left' | 'right') => {
     event.preventDefault()
+    const handle=event.currentTarget
+    let pending=settings.columnRatio??50
     const update = (clientX: number) => {
       const rect = paperRef.current?.getBoundingClientRect()
       if (!rect) return
       const normalized = (clientX - rect.left) / rect.width
       const raw = half === 'left' ? normalized * 200 : half === 'right' ? (normalized - .5) * 200 : normalized * 100
-      setSettings({ ...settings, columnRatio: Math.round(Math.min(75,Math.max(25,raw))) })
+      pending=Math.round(Math.min(75,Math.max(25,raw)));handle.style.left=`${half==='left'?pending/2:half==='right'?50+pending/2:pending}%`
     }
     const move = (next: PointerEvent) => update(next.clientX)
-    const stop = () => { window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',stop) }
+    const stop = () => { window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',stop);setSettings({ ...settings,columnRatio:pending }) }
     update(event.clientX); window.addEventListener('pointermove',move); window.addEventListener('pointerup',stop)
   }
   const ratio = settings.columnRatio ?? 50
   const previewMeta = buildPrintMeta(bundles)
+  const fitWidth = () => { const host=paperRef.current?.parentElement;if(!host)return;setZoom(Math.max(32,Math.min(200,Math.floor((host.clientWidth-32)/pageWidth*100)))) }
   const previewSlot = (slot: PrintSlot) => slot.content === 'page' ? `${page + 1} / ${pages}` : slotText(slot, previewMeta, printedAt)
   return <section className="print-preview-wrap">
     <div className="preview-label"><span>完整分页预览</span><em>{settings.paper.toUpperCase()} · {settings.density === 'ultra' ? '超紧凑四栏' : settings.density === 'compact' ? '紧凑' : '一般'}</em></div>
-    <div className="preview-toolbar"><button disabled={page === 0} onClick={() => setPage((value) => value - 1)}><ArrowLeft size={15} />上一页</button><strong>{page + 1} / {pages}</strong><button disabled={page === pages - 1} onClick={() => setPage((value) => value + 1)}>下一页<ArrowRight size={15} /></button><span /><button onClick={() => setZoom((value) => Math.max(32,value - 10))}><ZoomOut size={15} /></button><em>{zoom}%</em><button onClick={() => setZoom((value) => Math.min(200,value + 10))}><ZoomIn size={15} /></button><button title="恢复中外文均分" onClick={() => setSettings({ ...settings, columnRatio:50 })}><RotateCcw size={15} /></button></div>
+    <div className="preview-toolbar"><button disabled={page === 0} onClick={() => setPage((value) => value - 1)}><ArrowLeft size={15} />上一页</button><strong>{page + 1} / {pages}</strong><button disabled={page === pages - 1} onClick={() => setPage((value) => value + 1)}>下一页<ArrowRight size={15} /></button><span /><button className="zoom-preset" onClick={fitWidth}>适合页宽</button><button className="zoom-preset" onClick={() => setZoom(100)}>100%</button><button onClick={() => setZoom((value) => Math.max(32,value - 10))}><ZoomOut size={15} /></button><em>{zoom}%</em><button onClick={() => setZoom((value) => Math.min(200,value + 10))}><ZoomIn size={15} /></button><button title="恢复中外文均分" onClick={() => setSettings({ ...settings, columnRatio:50 })}><RotateCcw size={15} /></button></div>
     <div className="preview-canvas"><div ref={paperRef} className="preview-paper" style={{ width: pageWidth * zoom / 100, height: pageHeight * zoom / 100 }}><div ref={contentRef} className="preview-document" style={{ width:printableWidth, left:marginPx * zoom / 100, top:marginPx * zoom / 100, transform:`scale(${zoom / 100}) translateY(-${page * printableHeight}px)` }}><PrintDocument bundles={bundles} languages={languages} traveler={traveler} settings={settings} printedAt={printedAt} /></div>{(['header','footer'] as const).map((zone) => <div className={`preview-running-band ${zone}`} key={zone}>{(settings.bands || DEFAULT_PRINT.bands)[zone].map((slot) => <span key={slot.id}>{previewSlot(slot)}</span>)}</div>)}{settings.layout === 'parallel' && (settings.density === 'ultra' ? <><button className="preview-column-divider" style={{ left:`${ratio / 2}%` }} onPointerDown={(event) => resizePrintColumns(event,'left')} aria-label="调整左组中外文栏宽"><GripVertical size={11} /></button><button className="preview-column-divider" style={{ left:`${50 + ratio / 2}%` }} onPointerDown={(event) => resizePrintColumns(event,'right')} aria-label="调整右组中外文栏宽"><GripVertical size={11} /></button></> : <button className="preview-column-divider" style={{ left:`${ratio}%` }} onPointerDown={(event) => resizePrintColumns(event,'full')} aria-label="调整中外文栏宽"><GripVertical size={11} /></button>)}{!(settings.bands || DEFAULT_PRINT.bands).header.concat((settings.bands || DEFAULT_PRINT.bands).footer).some((slot) => slot.content === 'page') && <span className="preview-page-number">{page + 1} / {pages}</span>}</div></div>
   </section>
 }
@@ -660,7 +697,7 @@ const PrintDocument = forwardRef<HTMLDivElement, { bundles: PrintBundle[]; langu
   bundles.forEach((bundle) => bundle.scenes.forEach((scene) => scene.lines.forEach((line) => globalNumbers.set(`${bundle.key}:${scene.key}:${line.key}`, ++globalLine))))
   return <div ref={ref} className={`print-document density-${settings.density} layout-${printLayout} color-${settings.color} speaker-${settings.speakerLayout || 'column'} ${settings.lineNumbers ? '' : 'no-line-numbers'}`} style={{ '--doc-font': `${settings.fontSize}pt`, '--speaker-font':`${settings.speakerSize ?? 7}pt`, '--speaker-width':`${settings.speakerWidth ?? 14}mm`, '--number-font':`${settings.numberSize ?? 6}pt`, '--scene-title-font':`${settings.sceneTitleSize ?? 9}pt`, '--cover-title-font':`${settings.coverTitleSize ?? 15}pt`, '--line-gap':`${settings.lineGap ?? 1}mm`, '--scene-gap':`${settings.sceneGap ?? 1.5}mm`, '--print-language-count': shownLanguages.length } as React.CSSProperties}>
     {!hideBands && <><RunningBand slots={(settings.bands || DEFAULT_PRINT.bands).header} meta={meta} printedAt={printedAt} className="print-running-header" /><RunningBand slots={(settings.bands || DEFAULT_PRINT.bands).footer} meta={meta} printedAt={printedAt} className="print-running-footer" /></>}
-    {settings.cover && <header className="print-cover-page"><span>TEYVAT SCRIPTORIUM · MULTILINGUAL SCRIPT</span><h1>{meta.chapter}</h1><h2>{meta.chapterEn}</h2><p>{meta.quest} · {meta.questEn}</p><small>{[...new Set(bundles.map((bundle) => TYPE_NAMES[bundle.taskType || ''] || bundle.taskType).filter(Boolean))].join(' / ') || '剧情任务'} · {bundles.length} 项来源 · {sceneCount} 个场景 · {lineCount} 句选稿</small></header>}
+    {settings.cover && <header className="print-cover-page"><span>TEYVAT SCRIPTORIUM · MULTILINGUAL SCRIPT</span><h1>{meta.chapter}</h1><h2>{meta.chapterEn}</h2><p>{meta.quest} · {meta.questEn}</p>{settings.sceneLeads !== false && bundles[0]?.quest.description.zh && <div className="print-quest-lead">{shownLanguages.map((lang)=>localized(bundles[0].quest.description,lang)).filter(Boolean).join(' · ')}</div>}<small>{[...new Set(bundles.map((bundle) => TYPE_NAMES[bundle.taskType || ''] || bundle.taskType).filter(Boolean))].join(' / ') || '剧情任务'} · {bundles.length} 项来源 · {sceneCount} 个场景 · {lineCount} 句选稿</small></header>}
     {bundles.map((bundle, bundleIndex) => <section className="print-source" key={bundle.key}>
       {bundles.length > 1 && <header className="print-source-header"><span>PART {String(bundleIndex + 1).padStart(2,'0')}</span><div><strong>{localized(bundle.quest.title, shownLanguages[0])}</strong>{shownLanguages[1] && <small>{localized(bundle.quest.title, shownLanguages[1])}</small>}</div></header>}
       {bundle.scenes.map((scene, si) => {
@@ -678,7 +715,7 @@ const PrintDocument = forwardRef<HTMLDivElement, { bundles: PrintBundle[]; langu
         const content = settings.density === 'ultra' && printLayout === 'parallel'
           ? Array.from({ length: Math.ceil(renderedLines.length / 2) }, (_, row) => <div className="print-ultra-row" key={row}>{renderedLines.slice(row * 2, row * 2 + 2)}</div>)
           : renderedLines
-        return <section className="print-scene" key={`${bundle.key}:${scene.key}`}>{settings.sceneTitles && <header className="print-scene-header"><span>SCENE {String(si + 1).padStart(2,'0')}</span><div><strong>{localized(scene.title, shownLanguages[0])}</strong>{shownLanguages.slice(1).map((lang) => <small key={lang}>{localized(scene.title, lang)}</small>)}</div></header>}{scene.description.zh && <div className="print-scene-lead">{shownLanguages.map((lang) => localized(scene.description,lang)).filter(Boolean).join(' · ')}</div>}<div className="print-scene-lines">{content}</div></section>
+        return <section className="print-scene" key={`${bundle.key}:${scene.key}`}>{settings.sceneTitles && <header className="print-scene-header"><span>SCENE {String(si + 1).padStart(2,'0')}</span><div><strong>{localized(scene.title, shownLanguages[0])}</strong>{shownLanguages.slice(1).map((lang) => <small key={lang}>{localized(scene.title, lang)}</small>)}</div></header>}{settings.sceneLeads !== false && scene.description.zh && <div className="print-scene-lead">{shownLanguages.map((lang) => localized(scene.description,lang)).filter(Boolean).join(' · ')}</div>}<div className="print-scene-lines">{content}</div></section>
       })}
     </section>)}
   </div>
@@ -700,11 +737,12 @@ function PrintBandEditor({ bands, onChange }: { bands: PrintSettings['bands']; o
   </PrintGroup>
 }
 
-function Modal({ title, eyebrow, onClose, children, wide = false }: { title: string; eyebrow: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) { return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true"><header><div><span>{eyebrow}</span><h2>{title}</h2></div><button onClick={onClose}><X size={20} /></button></header>{eyebrow === 'CHANGELOG' && <div className="changelog changelog-latest"><article><span>v0.6.0 · 2026-08-12</span><h3>旅行历程与章幕导航</h3><ul><li>目录补充国家、章幕、Chapter 数量与同章幕数</li><li>类型、国家和版本支持多选，排序独立显示</li><li>新增邀约事件分类与横向旅行历程剧情树</li><li>固定导航展示 Act，并支持 Chapter 自动居中和普通滚轮横移</li><li>选稿池拖动时实时换位并平滑过渡</li></ul></article></div>}{children}</section></div> }
+function Modal({ title, eyebrow, onClose, children, wide = false }: { title: string; eyebrow: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) { return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true"><header><div><span>{eyebrow}</span><h2>{title}</h2></div><button onClick={onClose}><X size={20} /></button></header>{eyebrow === 'CHANGELOG' && <div className="changelog changelog-latest"><article><span>v0.7.0 · 2026-08-13</span><h3>完整邀约、语义分支与打印工作台</h3><ul><li>收录 19 个邀约事件，补充角色、版本和剧情节点，并支持站内打开正文</li><li>旅行历程支持按版本或按国家排列，同版本依国家、章、幕顺序展示</li><li>对话选项按真实剧情图识别，明确区分选项、分支回应与共同后续</li><li>搜索等待输入法组词完成；栏宽与打印滑杆在松手时一次提交，降低长文本卡顿</li><li>打印设置分为基础、高级排版与页面元素，支持引入文本、页宽适配、100% 至 200% 预览</li><li>预览与实际 PDF 使用同一分页参数，并增加页边距与页眉页脚安全检查</li></ul></article></div>}{children}</section></div> }
 function SettingRow({ title, children }: { title: string; children: React.ReactNode }) { return <div className="setting-row"><div><strong>{title}</strong></div>{children}</div> }
 function Segment({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[][] }) { return <div className="segment">{options.map(([v,l]) => <button className={value === v ? 'active' : ''} onClick={() => onChange(v)} key={v}>{l}</button>)}</div> }
 function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) { return <button className={checked ? 'switch on' : 'switch'} onClick={() => onChange(!checked)}><span /></button> }
 function PrintGroup({ title, children }: { title: string; children: React.ReactNode }) { return <div className="print-group"><label>{title}</label>{children}</div> }
+function CommitRange({ value, onCommit, ...props }: { value:number; onCommit:(value:number)=>void; min:number; max:number; step?:number }) { const [draft,setDraft]=useState(value);useEffect(()=>setDraft(value),[value]);const commit=()=>onCommit(draft);return <input type="range" {...props} value={draft} onChange={(event)=>setDraft(Number(event.target.value))} onPointerUp={commit} onKeyUp={commit} /> }
 function ToggleLine({ label, value, set }: { label: string; value: boolean; set: (v: boolean) => void }) { return <label><input type="checkbox" checked={value} onChange={(e) => set(e.target.checked)} /><span>{value && <Check size={11} />}</span>{label}</label> }
 function Toast({ message, onClose }: { message: string; onClose: () => void }) { useEffect(() => { const timer = setTimeout(onClose, 2600); return () => clearTimeout(timer) }, [message, onClose]); return <div className="notice-toast"><Check size={15} /><span>{message}</span><button onClick={onClose}><X size={14} /></button></div> }
 
@@ -743,7 +781,6 @@ export default function App() {
     return () => removeEventListener('popstate', onPopState)
   }, [])
   const openItem = async (item: CatalogItem) => {
-    if (item.sourceUrl) { window.open(item.sourceUrl,'_blank','noopener,noreferrer'); setNotice('邀约正文由 Honey Hunter 提供，已在新标签页打开'); return }
     if (await loadChapter(item.id, settings.languages || ['CHS','EN'])) {
       history.pushState({ teyvat: true, page: 'reader', fromCatalog: true }, '', `?chapter=${item.id}`)
       setPage('reader')
@@ -792,7 +829,7 @@ export default function App() {
   return <div className={`app-shell font-${settings.fontFamily || 'serif'}`}><Header page={page} theme={resolvedTheme} onTheme={() => setSettings({ ...settings, theme: resolvedTheme === 'dark' ? 'light' : 'dark' })} onCatalog={() => page === 'reader' && back()} onSettings={() => setSettingsOpen(true)} onChangelog={() => setChangelogOpen(true)} />
     {page === 'catalog' && catalog && <Catalog data={catalog} settings={settings} onOpen={openItem} sync={catalogSync} guideRequest={guideRequest} />}
     {page === 'catalog' && !catalog && !error && <div className="loading-page"><LoaderCircle className="spin" /><span>正在整理任务目录…</span></div>}
-    {page === 'reader' && chapter && <Reader data={chapter} settings={settings} setSettings={setSettings} onBack={back} onQueue={queueSelection} onQueueChapter={queueChapter} onOpenBasket={() => basket.length && setBasketOpen(true)} basketSources={basket.length} basketLines={basketLines} guideRequest={guideRequest} />}
+    {page === 'reader' && chapter && <Reader data={chapter} settings={settings} setSettings={setSettings} onBack={back} onQueue={queueSelection} onQueueChapter={queueChapter} onOpenBasket={() => basket.length && setBasketOpen(true)} onOpenPrint={()=>basket.length&&setPrintOpen(true)} basketSources={basket.length} basketLines={basketLines} guideRequest={guideRequest} />}
     {loading && <div className="loading-overlay"><LoaderCircle className="spin" /><strong>正在载入剧情</strong><span>{loadProgress.label}</span><div className="load-progress"><i style={{ width: `${loadProgress.value}%` }} /></div><small>{loadProgress.value}%</small></div>}
     {error && <div className="error-toast"><span>{error}</span><button onClick={() => { setError(''); if (page === 'reader' && !chapter) back() }}><X size={16} /></button></div>}
     {settingsOpen && <SettingsSheet value={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} onGuide={() => { localStorage.removeItem('teyvat:catalog-guide:v1'); localStorage.removeItem('teyvat:reader-guide:v1'); for (let index = sessionStorage.length - 1; index >= 0; index--) { const key = sessionStorage.key(index); if (key?.startsWith('teyvat:scene-guide:')) sessionStorage.removeItem(key) } setSettingsOpen(false); setGuideRequest((value) => value + 1) }} />}

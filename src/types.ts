@@ -8,6 +8,12 @@ export type DialogueLine = {
   kind: 'dialogue' | 'choice' | 'narration'
   speaker: LanguagePair
   text: LanguagePair
+  sourceType?: string
+  nextNodeId?: string
+  branchGroupId?: string
+  branchIndex?: number
+  branchTotal?: number
+  branchRole?: 'option' | 'response'
 }
 
 export type Scene = {
@@ -56,7 +62,7 @@ export type CatalogItem = {
   nation: string
   nationSource: 'wiki' | 'title-inference' | 'unknown'
   version: string | null
-  versionSource: 'yatta-changelog' | 'wiki' | 'unknown'
+  versionSource: 'yatta-changelog' | 'wiki' | 'curated' | 'unknown'
   versionGroup: string
   wikiPage: string | null
   hidden: boolean
@@ -105,6 +111,7 @@ export type PrintSettings = {
   sceneTitles: boolean
   speakers: boolean
   lineNumbers: boolean
+  sceneLeads: boolean
   columnRatio: number
   speakerLayout: 'column' | 'inline'
   speakerSize: number

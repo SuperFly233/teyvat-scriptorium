@@ -38,12 +38,17 @@ function normalize(dataByLang, id, languages) {
             const textMap = Object.fromEntries(languages.map((lang) => [lang, values(itemByLang[lang]?.text)[variant]?.text || '']))
             if (!Object.values(textMap).some(Boolean)) continue
             const roleMap = Object.fromEntries(languages.map((lang) => [lang, itemByLang[lang]?.role || (lang === 'CHS' ? '旅行者' : lang === 'EN' ? 'Traveler' : '')]))
-            const choice = !item.role || itemId.endsWith('-player') || item.type === 'MultiDialog'
+            // Only MultiDialog records are actual mutually-exclusive player choices.
+            // A role-less SingleDialog is usually Traveler internal monologue, not a branch.
+            const choice = item.type === 'MultiDialog' && maxVariants > 1
+            const next = values(itemByLang[primaryLang]?.text)[variant]?.next
             lines.push({
               key: `${step.id}-${taskIndex}-${itemId}-${variant}`,
               nodeId: itemId,
               variant,
-              kind: choice ? 'choice' : item.isBlackScreen ? 'narration' : 'dialogue',
+              kind: item.isBlackScreen ? 'narration' : choice ? 'choice' : 'dialogue',
+              sourceType: item.type || '',
+              nextNodeId: next === undefined || next === null ? '' : String(next),
               speaker: localized(roleMap, 'Traveler'),
               text: localized(textMap),
             })
