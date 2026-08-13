@@ -448,8 +448,11 @@ body:has(.print-studio) .notice-toast { bottom:82px; }
 .script-compact .utterances { width:100%;grid-template-columns:repeat(var(--language-count),minmax(0,1fr)); }
 .reader-column-divider { width:18px;position:absolute;top:56px;bottom:0;z-index:8;transform:translateX(-9px);padding:0;display:flex;align-items:flex-start;justify-content:center;border:0;color:var(--muted);background:transparent;cursor:col-resize;touch-action:none; }
 .reader-column-divider::before { content:"";width:3px;position:absolute;top:0;bottom:0;left:7px;background:color-mix(in srgb,var(--red) 35%,var(--line));opacity:.45;transition:opacity .15s,background .15s; }
-.reader-column-divider svg { position:sticky;top:170px;margin-top:12px;padding:2px;border-radius:10px;background:var(--paper-2);box-shadow:0 0 0 1px var(--line); }
+.reader-column-divider svg { position:sticky;top:200px;margin-top:12px;padding:2px;border-radius:10px;background:var(--paper-2);box-shadow:0 0 0 1px var(--line); }
 .reader-column-divider:hover::before,.reader-column-divider:focus-visible::before { opacity:1;background:var(--red); }
+.script.resizing-columns { cursor:col-resize;user-select:none;contain:layout style; }
+.script.resizing-columns .dialogue-row,.script.resizing-columns .utterance { pointer-events:none; }
+.script.resizing-columns .reader-column-divider { pointer-events:auto; }
 .ratio-setting { display:flex;align-items:center;gap:12px; }.ratio-setting input { flex:1; }.ratio-setting button { min-height:36px;padding:0 11px;display:flex;align-items:center;gap:6px;border:1px solid var(--line);color:var(--ink);background:var(--paper-3);font-size:13px; }
 
 /* Selection workflow and persistent basket */

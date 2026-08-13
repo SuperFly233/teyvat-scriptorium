@@ -175,6 +175,8 @@ function Header({ page, theme, onTheme, onCatalog, onSettings, onChangelog }: {
 
 function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: CatalogData; settings: AppSettings; onOpen: (item: CatalogItem) => void; sync: { checking: boolean; added: number; modified: number; checkedAt: string }; guideRequest:number }) {
   const [query, setQuery] = useSessionState('teyvat:catalog:query', '')
+  const [composing,setComposing] = useState(false)
+  const deferredQuery = useDeferredValue(composing ? '' : query)
   const [types, setTypes] = useSessionState<string[]>('teyvat:catalog:types', [])
   const [nations, setNations] = useSessionState<string[]>('teyvat:catalog:nations', [])
   const [versions, setVersions] = useSessionState<string[]>('teyvat:catalog:versions', [])
@@ -191,7 +193,7 @@ function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: Catalog
     return () => sessionStorage.setItem('teyvat:catalog:scroll', String(scrollY))
   }, [])
   const items = useMemo(() => {
-    const needle = normalizeSearch(query)
+    const needle = normalizeSearch(deferredQuery)
     const list = data.items.filter((item) => {
       if (!settings.showHidden && item.hidden) return false
       if (!settings.showUnreleased && item.unreleased) return false
@@ -208,7 +210,7 @@ function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: Catalog
       const bv = b.version ? Number(b.version.replace('.', '')) : 0
       return bv - av || b.id - a.id
     })
-  }, [data, query, types, nations, versions, sort, settings.showHidden, settings.showUnreleased])
+  }, [data, deferredQuery, types, nations, versions, sort, settings.showHidden, settings.showUnreleased])
   const actCounts = useMemo(() => new Map([...new Set(data.items.filter((item) => item.type === 'aq').map(chapterFamily))].map((family) => [family,data.items.filter((item) => item.type === 'aq' && chapterFamily(item) === family && !item.hidden && !item.unreleased).length])),[data])
   const timeline = useMemo(() => [...new Set(data.items.map((item) => item.version).filter(Boolean) as string[])].sort((a,b) => Number(a.replace('.','')) - Number(b.replace('.',''))).map((version) => { const versionItems=data.items.filter((item) => item.version===version&&!item.hidden&&!item.unreleased); return { version,items:versionItems,archon:versionItems.filter((item)=>item.type==='aq'),stories:versionItems.filter((item)=>item.type==='lq'),world:versionItems.filter((item)=>item.type==='wq'),events:versionItems.filter((item)=>item.type==='eq'),milestone:REGION_MILESTONES[version] } }),[data])
   const resetFilters = () => { setQuery('');setTypes([]);setNations([]);setVersions([]);setLimit(60) }
@@ -219,7 +221,7 @@ function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: Catalog
     </section>
     {catalogView === 'cards' && <section className="catalog-controls">
       {guideVisible && <aside className="catalog-guide-board"><Info size={20} /><div><strong>从目录开始</strong><p>筛选项可以多选；排序在结果栏右侧。也可以切换“旅行历程”，按版本浏览剧情主干与支线。</p></div><button onClick={() => { localStorage.setItem('teyvat:catalog-guide:v1','done'); setGuideVisible(false) }}><X size={16} />知道了</button></aside>}
-      <label className="catalog-search"><Search size={18} /><input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(60) }} placeholder="搜索任务、章幕或 ID" />{query && <button onClick={() => { setQuery(''); setLimit(60) }}><X size={15} /></button>}</label>
+      <label className="catalog-search"><Search size={18} /><input value={query} onCompositionStart={()=>setComposing(true)} onCompositionEnd={(event)=>{setComposing(false);setQuery(event.currentTarget.value);setLimit(60)}} onChange={(event) => { setQuery(event.target.value); if (!composing) setLimit(60) }} placeholder="搜索任务、章幕或 ID" />{query && <button onClick={() => { setQuery(''); setLimit(60) }}><X size={15} /></button>}</label>
       <div className="filter-row">
         <MultiFilter id="types" open={openPopover==='types'} onOpen={()=>setOpenPopover(openPopover==='types'?null:'types')} icon={<BookOpenText size={15}/>} label="任务类型" values={types} onChange={(next)=>{setTypes(next);setLimit(60)}} options={TYPE_FILTERS.map((key)=>[key,TYPE_NAMES[key]])}/>
         <MultiFilter id="nations" open={openPopover==='nations'} onOpen={()=>setOpenPopover(openPopover==='nations'?null:'nations')} icon={<Snowflake size={15}/>} label="国家地区" values={nations} onChange={(next)=>{setNations(next);setLimit(60)}} options={Object.entries(NATION_NAMES)}/>
@@ -386,9 +388,18 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
     if (!script) return
     liveLanguageWidths.current = widths
     script.style.setProperty('--reader-columns', widths.map((width) => `minmax(0,${width}fr)`).join(' '))
-    const content = script.querySelector('.utterances')?.getBoundingClientRect()
-    const scriptBox = script.getBoundingClientRect()
-    if (content) script.querySelectorAll<HTMLElement>('.reader-column-divider').forEach((divider, index) => divider.style.left = `${content.left - scriptBox.left + content.width * widths.slice(0,index + 1).reduce((a,b) => a + b,0) / 100}px`)
+    requestAnimationFrame(() => positionReaderDividers(widths))
+  }
+  const positionReaderDividers = (widths: number[]) => {
+    const script = scriptRef.current
+    const content = script?.querySelector('.utterances')?.getBoundingClientRect()
+    const scriptBox = script?.getBoundingClientRect()
+    if (!script || !content || !scriptBox) return
+    let accumulated = 0
+    script.querySelectorAll<HTMLElement>('.reader-column-divider').forEach((divider, index) => {
+      accumulated += widths[index] || 0
+      divider.style.left = `${content.left - scriptBox.left + content.width * accumulated / 100}px`
+    })
   }
   useEffect(() => {
     const widths = settings.languageWidths?.length === activeLanguages.length ? settings.languageWidths : equalWidths
@@ -401,23 +412,27 @@ function Reader({ data, settings, setSettings, onBack, onQueue, onQueueChapter, 
     event.preventDefault()
     const startX = event.clientX
     const initial = [...liveLanguageWidths.current]
-    const divider = event.currentTarget
+    const script = scriptRef.current
+    const content = script?.querySelector('.utterances')?.getBoundingClientRect()
+    const scriptBox = script?.getBoundingClientRect()
+    if (!script || !content || !scriptBox) return
     let pending = initial
+    let frame = 0
+    let latestX = startX
     const update = (clientX: number) => {
-      const content = scriptRef.current?.querySelector('.utterances')?.getBoundingClientRect()
-      if (!content) return
       const delta = (clientX - startX) / content.width * 100
       const next = [...initial]
       const applied = Math.max(15 - initial[boundary], Math.min(initial[boundary + 1] - 15, delta))
       next[boundary] = initial[boundary] + applied; next[boundary + 1] = initial[boundary + 1] - applied
       pending = next
-      const contentBox = scriptRef.current?.querySelector('.utterances')?.getBoundingClientRect();const scriptBox=scriptRef.current?.getBoundingClientRect()
-      if(contentBox&&scriptBox)divider.style.left=`${contentBox.left-scriptBox.left+contentBox.width*next.slice(0,boundary+1).reduce((a,b)=>a+b,0)/100}px`
+      positionReaderDividers(next)
     }
-    const move = (next: PointerEvent) => update(next.clientX)
-    const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop);applyReaderWidths(pending);setSettings({ ...settings, languageWidths:pending, columnRatio:pending[0] }) }
+    const move = (next: PointerEvent) => { latestX=next.clientX;if(!frame)frame=requestAnimationFrame(()=>{frame=0;update(latestX)}) }
+    const stop = () => { if(frame)cancelAnimationFrame(frame);update(latestX);window.removeEventListener('pointermove', move);window.removeEventListener('pointerup', stop);window.removeEventListener('pointercancel',stop);script.classList.remove('resizing-columns');applyReaderWidths(pending);setSettings({ ...settings, languageWidths:pending, columnRatio:pending[0] }) }
+    script.classList.add('resizing-columns')
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel',stop)
   }
   return <main className={`reader-page font-${settings.fontFamily || 'serif'} ${selectionMode ? 'selection-active' : ''}`} style={{ '--zh-size': `${settings.zhSize}px`, '--en-size': `${settings.enSize}px`, '--reader-leading': settings.lineHeight } as React.CSSProperties}>
     <nav className="chapter-nav-shell" aria-label="章节导航">
@@ -493,9 +508,10 @@ function SceneBlock({ scene, sceneIndex, mode, languages, traveler, selected, to
 function HighlightText({ text, query }: { text: string; query: string }) { if (!query.trim()) return <>{text || '—'}</>; const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); const parts = text.split(new RegExp(`(${escaped})`, 'ig')); return <>{parts.map((part, index) => part.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) ? <mark key={index}>{part}</mark> : part)}</> }
 function DialogueRow({ line, index, optionIndex, optionTotal, mode, languages, traveler, checked, toggle, selecting, query, match, focused }: { line: DialogueLine; index: number; optionIndex?: number; optionTotal?:number; mode: ViewMode; languages: LanguageCode[]; traveler: Traveler; checked: boolean; toggle: () => void; selecting: boolean; query: string; match: boolean; focused: boolean }) {
   const activate = (event: React.MouseEvent | React.KeyboardEvent) => { if (!selecting || (event.target as HTMLElement).closest('button,select,input,a')) return; toggle() }
+  const highlightQuery = match ? query : ''
   return <article role={selecting ? 'checkbox' : undefined} aria-checked={selecting ? checked : undefined} tabIndex={selecting ? 0 : undefined} onClick={activate} onKeyDown={(event) => { if (selecting && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggle() } }} data-line-key={line.key} data-node-id={line.nodeId} className={`dialogue-row kind-${line.kind} ${line.branchRole?`branch-${line.branchRole} branch-${line.branchFlow}`:''} ${selecting && checked ? 'selected' : 'not-selected'} ${query && !match ? 'search-muted' : ''} ${focused ? 'search-focused' : ''}`}>
     <button className="line-select" disabled={!selecting} onClick={() => toggle()} aria-label={checked ? '从选稿移除' : '加入选稿'}><span>{selecting && checked && <Check size={11} />}</span><small>{optionIndex === undefined ? String(index + 1).padStart(2,'0') : `${optionIndex + 1}/${optionTotal}`}</small></button>
-    <div className="dialogue-main"><div className="utterances" style={{ '--language-count': languages.length } as React.CSSProperties}>{languages.map((lang) => <div className="utterance" lang={languageInfo(lang).locale} key={lang}>{line.kind !== 'narration' && localized(line.speaker,lang) && <strong><HighlightText text={localized(line.speaker, lang)} query={query} /></strong>}<p><HighlightText text={formatGameText(localized(line.text, lang), traveler)} query={query} /></p></div>)}</div>{line.kind === 'narration' && <em className="choice-label">画面文字</em>}</div>
+    <div className="dialogue-main"><div className="utterances" style={{ '--language-count': languages.length } as React.CSSProperties}>{languages.map((lang) => <div className="utterance" lang={languageInfo(lang).locale} key={lang}>{line.kind !== 'narration' && localized(line.speaker,lang) && <strong><HighlightText text={localized(line.speaker, lang)} query={highlightQuery} /></strong>}<p><HighlightText text={formatGameText(localized(line.text, lang), traveler)} query={highlightQuery} /></p></div>)}</div>{line.kind === 'narration' && <em className="choice-label">画面文字</em>}</div>
   </article>
 }
 

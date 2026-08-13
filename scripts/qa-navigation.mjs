@@ -20,7 +20,7 @@ await page.evaluate(()=>scrollTo(0,900)); await page.waitForTimeout(100)
 const sticky=await page.locator('.chapter-nav-shell').evaluate((node)=>({top:node.getBoundingClientRect().top,height:node.getBoundingClientRect().height}))
 await page.screenshot({path:'artifacts/navigation-desktop.jpg',type:'jpeg',quality:80,fullPage:false})
 
-await page.locator('.act-queue-action').click(); await page.locator('.basket-dock button').click()
+await page.locator('.act-queue-action').click(); await page.getByRole('button',{name:/选稿池/}).click()
 const items=page.locator('.basket-items article'); const firstBefore=await items.first().locator('strong').textContent(); const thirdBefore=await items.nth(2).locator('strong').textContent()
 const transfer=await page.evaluateHandle(()=>new DataTransfer())
 await items.first().dispatchEvent('dragstart',{dataTransfer:transfer}); await items.nth(2).dispatchEvent('dragenter',{dataTransfer:transfer}); await page.waitForTimeout(40)
