@@ -18,7 +18,7 @@ function nationFor(item) {
   const hint = `${item.chapterIcon || ''} ${item.chapterImageTitle || ''} ${item.chapterTitle || ''}`.toLowerCase()
   const rules = [
     ['mondstadt', /mengde|mondstadt|dragonspine|fleurfair|goldenapple|aster/],
-    ['liyue', /liyue|sealam|chasm|firmament|lantern|moonchase/],
+    ['liyue', /liyue|sealam|chasm|firmament|lantern|moonchase|qunyuge|roguelikediary/],
     ['inazuma', /inazuma|irodori|mikawa|onmyo|enkanomiya/],
     ['sumeru', /sumeru|deshret|fungus|aranara/],
     ['fontaine', /fontaine|meropide|remuria/],
@@ -28,6 +28,16 @@ function nationFor(item) {
     ['traveler', /traveler|journey|dainsleif|khaenri|common/],
   ]
   return rules.find(([, pattern]) => pattern.test(hint))?.[0] || 'unknown'
+}
+
+const avatarRegion = (region = '') => ({ MONDSTADT:'mondstadt',LIYUE:'liyue',INAZUMA:'inazuma',SUMERU:'sumeru',FONTAINE:'fontaine',NATLAN:'natlan',NODKRAI:'nodkrai',NODKRAI_ZIBAI:'nodkrai',SNEZHNAYA:'snezhnaya',SNEZHNAYA_STAR:'snezhnaya' }[region] || null)
+const commissionNation = (item) => item.type === 'iq' ? ({ '2':'inazuma','3':'sumeru','4':'fontaine','5':'natlan','6':'nodkrai' }[item.version?.split('.')[0]] || null) : null
+// These characters have a cross-national or non-national affiliation in the
+// avatar dataset, so classify their Story Quest by its verified main location.
+const storyQuestLocationNation = {
+  2012: 'liyue',
+  2047: 'fontaine',
+  2075: 'liyue',
 }
 
 const WIKI_API = 'https://genshin-impact.fandom.com/api.php'
@@ -76,10 +86,11 @@ async function getWikiMetadata(titles) {
   return cache
 }
 
-const [zhPayload, enPayload, changelog] = await Promise.all([
+const [zhPayload, enPayload, changelog,avatars] = await Promise.all([
   get('CHS/quest'),
   get('EN/quest'),
   get('static/changelog'),
+  get('CHS/avatar'),
 ])
 
 const zhItems = zhPayload.items || {}
@@ -91,6 +102,9 @@ for (const [rawVersion, release] of Object.entries(changelog)) {
 }
 
 const ids = [...new Set([...Object.keys(zhItems), ...Object.keys(enItems)])]
+const avatarItems=Object.values(avatars.items||{})
+const avatarNationByIcon=new Map(avatarItems.map((avatar)=>[String(avatar.icon||'').replace('UI_AvatarIcon_','').toLowerCase(),avatarRegion(avatar.region)]).filter(([,nation])=>nation))
+const avatarNationByName=new Map(avatarItems.map((avatar)=>[clean(avatar.name),avatarRegion(avatar.region)]).filter(([name,nation])=>name&&nation))
 let items = ids.map((id) => {
   const zh = zhItems[id]
   const en = enItems[id]
@@ -119,13 +133,18 @@ let items = ids.map((id) => {
 const wikiMetadata = await getWikiMetadata([...new Set(items.map((item) => item.title.en))])
 items = items.map((item) => {
   const wiki = wikiMetadata[item.title.en]
+  const iconKey=String(item.icon||'').replace('UI_ChapterIcon_','').toLowerCase()
+  const questLocationNation=item.type==='lq'?storyQuestLocationNation[item.id]||null:null
+  const characterNation=item.type==='lq'?(avatarNationByIcon.get(iconKey)||avatarNationByName.get(item.imageTitle.zh)):null
+  const inferredCommissionNation=commissionNation(item)
+  const nation=wiki?.nation||questLocationNation||characterNation||inferredCommissionNation||item.nation
   return {
     ...item,
     version: item.version || wiki?.version || null,
     versionSource: item.version ? item.versionSource : wiki?.version ? 'wiki' : 'unknown',
     versionGroup: (item.version || wiki?.version)?.split('.')[0] || 'unknown',
-    nation: wiki?.nation || item.nation,
-    nationSource: wiki?.nation ? 'wiki' : item.nationSource,
+    nation,
+    nationSource: wiki?.nation?'wiki':questLocationNation?'quest-location':characterNation?'yatta-avatar':inferredCommissionNation?'version-series':item.nationSource,
     wikiPage: wiki?.matched ? wiki.page : null,
   }
 })

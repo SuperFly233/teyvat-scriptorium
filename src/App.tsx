@@ -63,6 +63,7 @@ const REGION_MILESTONES:Record<string,{ nation:string; version:string; date:stri
   '6.0':{ nation:'nodkrai',version:'6.0',date:'2025-09-10',label:'挪德卡莱' },
   '7.0':{ nation:'snezhnaya',version:'7.0',date:'2026-08-12',label:'至冬' },
 }
+const NATION_SOURCE_NAMES:Record<CatalogItem['nationSource'],string>={wiki:'Genshin Impact Wiki 任务分类','title-inference':'Yatta 章节标题或内部图标','quest-location':'任务流程发生地核验','yatta-avatar':'Yatta 角色资料所属地区','version-series':'每日委托发布版本系列','unknown':'上游目录未提供地区字段'}
 const chapterFamily = (item:CatalogItem) => item.chapter.zh.match(/^(第[^ ]+章|空月之歌)/)?.[1] || item.chapter.zh || `${item.nation}:${item.version}`
 const chineseNumber=(raw='')=>{ const direct=Number(raw);if(Number.isFinite(direct))return direct;const digits:Record<string,number>={零:0,一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9,十:10};if(raw==='十')return 10;if(raw.startsWith('十'))return 10+(digits[raw[1]]||0);if(raw.endsWith('十'))return (digits[raw[0]]||0)*10;return digits[raw]||0 }
 const narrativeOrder=(item:CatalogItem)=>{ const chapter=item.chapter.zh.match(/第([^章 ]+)章/)?.[1]||'';const act=item.chapter.zh.match(/第([^幕 ]+)幕/)?.[1]||'';return chineseNumber(chapter)*100+chineseNumber(act) }
@@ -234,8 +235,8 @@ function Catalog({ data, settings, onOpen, sync, guideRequest }: { data: Catalog
       {items.slice(0, limit).map((item) => <button className="catalog-card" key={item.id} onClick={() => onOpen(item)}>
         <div className="card-top"><span className={`type-badge type-${item.type}`}>{TYPE_NAMES[item.type] || '其他'}</span><span className="version-badge">{item.version ? `v${item.version}` : '—'} · #{item.id}</span></div>
         <h2>{item.title.zh}</h2><h3>{item.title.en}</h3>
-        {(item.type==='lq'||item.type==='hq')&&item.imageTitle.zh&&<div className="character-chapter"><span>{item.imageTitle.zh}</span><strong>{item.chapter.zh||'章名待考'}</strong></div>}
-        <div className="card-context"><span>{NATION_NAMES[item.nation] || '地区待考'}</span>{item.type!=='lq'&&item.type!=='hq'&&item.chapter.zh && <strong>{item.chapter.zh}</strong>}<span>{item.type==='hq' ? `${item.chapterCount} 个剧情节点` : `${item.chapterCount} Chapters`}</span></div>
+        {(item.type==='lq'||item.type==='hq')&&item.imageTitle.zh&&<div className="character-chapter"><span>{item.imageTitle.zh}</span><strong>{item.chapter.zh||'上游未提供章名'}</strong></div>}
+        <div className="card-context"><span title={`地区来源：${NATION_SOURCE_NAMES[item.nationSource]}`}>{NATION_NAMES[item.nation] || '未归属地区'}</span>{item.type!=='lq'&&item.type!=='hq'&&item.chapter.zh && <strong>{item.chapter.zh}</strong>}<span>{item.type==='hq' ? `${item.chapterCount} 个剧情节点` : `${item.chapterCount} Chapters`}</span></div>
         {item.type === 'aq' && <p className="act-summary">{chapterFamily(item)}已收录 {actCounts.get(chapterFamily(item)) || 1} 幕</p>}
       </button>)}
     </section>}

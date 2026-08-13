@@ -62,7 +62,7 @@ export type CatalogItem = {
   chapterCount: number
   icon: string | null
   nation: string
-  nationSource: 'wiki' | 'title-inference' | 'unknown'
+  nationSource: 'wiki' | 'title-inference' | 'quest-location' | 'yatta-avatar' | 'version-series' | 'unknown'
   version: string | null
   versionSource: 'yatta-changelog' | 'wiki' | 'curated' | 'unknown'
   versionGroup: string
