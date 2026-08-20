@@ -208,7 +208,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.8.7";
+const APP_VERSION = "v0.8.8";
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
   "mondstadt",
@@ -4682,6 +4682,15 @@ function Modal({
         </header>
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
+            <article>
+              <span>v0.8.8 · 2026-08-20</span>
+              <h3>自动资料更新可靠性修复</h3>
+              <ul>
+                <li>邀约事件改由 Yatta 结构化接口发现和更新，Honey 作为核验来源，不再因其反爬 403 阻断每日任务。</li>
+                <li>目录、邀约和默认正文独立更新；单一外站短暂不可用时保留最近有效快照，不丢弃其他成功结果。</li>
+                <li>新增完整性校验与 Actions 更新摘要；内容没有变化时保留原生成时间，不再制造空提交和重复部署。</li>
+              </ul>
+            </article>
             <article>
               <span>v0.8.7 · 2026-08-14</span>
               <h3>差异分支触发问题排版修复</h3>

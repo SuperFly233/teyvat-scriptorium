@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { writeStableSnapshot } from './lib/data-update.mjs'
 
 const questId = process.argv[2] || '1700'
 const API_ROOT = 'https://gi.yatta.moe/api/v2'
@@ -120,7 +121,7 @@ const [zh, en] = await Promise.all([fetchLanguage('CHS'), fetchLanguage('EN')])
 const normalized = normalize(zh, en)
 const outputDir = resolve('public/data')
 await mkdir(outputDir, { recursive: true })
-await writeFile(resolve(outputDir, `quest-${questId}.json`), `${JSON.stringify(normalized)}\n`, 'utf8')
+const result = await writeStableSnapshot(resolve(outputDir, `quest-${questId}.json`), normalized)
 await writeFile(resolve(outputDir, 'manifest.json'), `${JSON.stringify({
   schemaVersion: 1,
   defaultChapter: Number(questId),
@@ -132,4 +133,4 @@ await writeFile(resolve(outputDir, 'manifest.json'), `${JSON.stringify({
   }],
 })}\n`, 'utf8')
 
-console.log(`Saved chapter ${questId}: ${normalized.stats.quests} quests, ${normalized.stats.scenes} scenes, ${normalized.stats.lines} aligned lines (${normalized.stats.missingPairs} incomplete pairs).`)
+console.log(`${result.semanticChanged ? 'Updated' : 'Checked'} chapter ${questId}: ${normalized.stats.quests} quests, ${normalized.stats.scenes} scenes, ${normalized.stats.lines} aligned lines (${normalized.stats.missingPairs} incomplete pairs).`)

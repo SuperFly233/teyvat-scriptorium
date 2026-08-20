@@ -15,19 +15,28 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
-      - run: npm run data:update
+      - name: Install updater dependencies
+        run: npm ci --ignore-scripts
+      - name: Refresh independent data snapshots
+        run: npm run data:update
+      - name: Validate publishable snapshots
+        run: npm run data:validate
       - name: Commit changed snapshots
+        id: commit
         shell: bash
         run: |
           if git diff --quiet -- public/data; then
             echo "Catalog snapshot is already current."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "### 发布结果：无需提交" >> "$GITHUB_STEP_SUMMARY"
+            echo "数据内容没有变化，保留原生成时间，不触发空提交或空部署。" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           git config user.name "teyvat-catalog-bot"
@@ -35,3 +44,6 @@ jobs:
           git add public/data
           git commit -m "data: refresh story catalog"
           git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "### 发布结果：已提交新快照" >> "$GITHUB_STEP_SUMMARY"
+          git show --stat --oneline HEAD >> "$GITHUB_STEP_SUMMARY"

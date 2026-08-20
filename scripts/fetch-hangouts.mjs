@@ -1,25 +1,122 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { fetchJson, mapLimit, writeStableSnapshot } from './lib/data-update.mjs'
 
-const decode = (value='') => value
-  .replace(/<[^>]+>/g,'')
-  .replace(/&#(\d+);/g,(_,code)=>String.fromCodePoint(Number(code)))
-  .replace(/&#x([\da-f]+);/gi,(_,code)=>String.fromCodePoint(Number.parseInt(code,16)))
-  .replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/&quot;/g,'"')
-  .trim()
-async function index(lang) {
-  const response=await fetch(`https://gensh.honeyhunterworld.com/chap_cat_hq/?lang=${lang}`,{headers:{'user-agent':'Teyvat-Scriptorium/0.5 hangout index'}})
-  if (!response.ok) throw new Error(`Honey ${lang}: ${response.status}`)
-  const html=await response.text();const rows=new Map();const marker='sortable_data.push(';const start=html.indexOf(marker)+marker.length;const end=html.indexOf(');',start)
-  if(start>=marker.length&&end>start){for(const row of JSON.parse(html.slice(start,end))){const id=Number(row[0].match(/ch_(\d+)/)?.[1]);if(id)rows.set(id,{title:decode(row[1]),chapter:decode(row[2]),character:decode(row[3])})}}
-  return rows
+const ROOT = 'https://gi.yatta.moe/api/v2'
+const output = resolve('public/data/hangouts.json')
+const curatedVersions = {
+  101401:'1.4', 103401:'1.4', 103601:'1.4', 103201:'1.4', 103402:'1.5', 103901:'1.5',
+  105001:'2.2', 105301:'2.2', 102401:'2.3', 105501:'2.3', 106401:'2.4', 102701:'2.4',
+  106501:'2.7', 105901:'2.8', 107601:'3.5', 107401:'3.6', 108101:'3.7', 101501:'3.8', 108301:'4.5',
+}
+const regionNation = {
+  MONDSTADT:'mondstadt', LIYUE:'liyue', INAZUMA:'inazuma', SUMERU:'sumeru', FONTAINE:'fontaine',
+  NATLAN:'natlan', NODKRAI:'nodkrai', NODKRAI_ZIBAI:'nodkrai', SNEZHNAYA:'snezhnaya', SNEZHNAYA_STAR:'snezhnaya',
 }
 
-const [zh,en]=await Promise.all([index('CHS'),index('EN')])
-const versionFor={101401:'1.4',103401:'1.4',103601:'1.4',103201:'1.4',103402:'1.5',103901:'1.5',105001:'2.2',105301:'2.2',102401:'2.3',105501:'2.3',106401:'2.4',102701:'2.4',106501:'2.7',105901:'2.8',107601:'3.5',107401:'3.6',108101:'3.7',101501:'3.8',108301:'4.5'}
-const nationFor=(name='')=>({Barbara:'mondstadt',Noelle:'mondstadt',Bennett:'mondstadt',Diona:'mondstadt',Chongyun:'liyue',Ningguang:'liyue',Beidou:'liyue',YunJin:'liyue',Gorou:'inazuma',Thoma:'inazuma',Sayu:'inazuma',KukiShinobu:'inazuma',ShikanoinHeizou:'inazuma',Faruzan:'sumeru',Layla:'sumeru',Kaveh:'sumeru',Kaeya:'mondstadt',Lynette:'fontaine'})[name.replace(/[^A-Za-z]/g,'')]||'unknown'
-const items=await Promise.all([...new Set([...zh.keys(),...en.keys()])].map(async(id)=>{const z=zh.get(id)||en.get(id);const e=en.get(id)||z;const detail=await fetch(`https://gi.yatta.moe/api/v2/CHS/quest/${id}`,{headers:{'user-agent':'Teyvat-Scriptorium/0.7 hangout metadata'}}).then((response)=>response.ok?response.json():null).catch(()=>null);const version=versionFor[id]||null;return {id,type:'hq',title:{zh:z.title,en:e.title},chapter:{zh:z.chapter,en:e.chapter},imageTitle:{zh:z.character,en:e.character},route:'',chapterCount:detail?.data?.info?.chapterCount||Object.keys(detail?.data?.storyList||{}).length||0,icon:detail?.data?.info?.chapterIcon||null,nation:nationFor(e.character),nationSource:'title-inference',version,versionSource:version?'curated':'unknown',versionGroup:version?.split('.')[0]||'unknown',wikiPage:null,hidden:false,unreleased:false,languages:{zh:Boolean(zh.get(id)),en:Boolean(en.get(id))},sourceUrl:`https://gensh.honeyhunterworld.com/ch_${id}/?lang=CHS`}}))
-const output=resolve('public/data/hangouts.json');let previous=null;try{previous=JSON.parse(await readFile(output,'utf8'))}catch{/* first snapshot */}
-const unchanged=previous&&JSON.stringify(previous.items)===JSON.stringify(items)
-await mkdir(resolve('public/data'),{recursive:true});await writeFile(output,`${JSON.stringify({schemaVersion:1,generatedAt:unchanged?previous.generatedAt:new Date().toISOString(),source:'Honey Hunter World',items})}\n`,'utf8')
-console.log(`Saved ${items.length} Hangout Event chapters.`)
+let previous = { items: [] }
+try { previous = JSON.parse(await readFile(output, 'utf8')) } catch { /* first snapshot */ }
+const previousById = new Map(previous.items.map((item) => [item.id, item]))
+
+async function yatta(path, { allowNotFound = false } = {}) {
+  const payload = await fetchJson(`${ROOT}/${path}`, { label: `Yatta ${path}`, allowNotFound })
+  if (payload === null) return null
+  if (payload.response !== 200 || !payload.data) throw new Error(`Yatta ${path}: invalid payload`)
+  return payload.data
+}
+
+const [zhAvatars, enAvatars] = await Promise.all([yatta('CHS/avatar'), yatta('EN/avatar')])
+const zhAvatarList = Object.values(zhAvatars.items || {})
+const enAvatarList = Object.values(enAvatars.items || {})
+const numericAvatars = zhAvatarList.filter((avatar) => Number.isInteger(Number(avatar.id)))
+const avatarByCode = new Map()
+for (const [language, list] of [['zh', zhAvatarList], ['en', enAvatarList]]) {
+  for (const avatar of list) {
+    const numericId = Number(avatar.id)
+    if (!Number.isInteger(numericId)) continue
+    const code = numericId - 10_000_000
+    avatarByCode.set(code, { ...avatarByCode.get(code), [language]:avatar })
+  }
+}
+
+const identity = (id) => {
+  const match = String(id).match(/^1(\d{3})(\d{2})$/)
+  return match ? { character:Number(match[1]), act:Number(match[2]) } : null
+}
+const questId = (character, act) => Number(`1${String(character).padStart(3, '0')}${String(act).padStart(2, '0')}`)
+const actsByCharacter = new Map()
+for (const item of previous.items) {
+  const parsed = identity(item.id)
+  if (!parsed) continue
+  actsByCharacter.set(parsed.character, Math.max(actsByCharacter.get(parsed.character) || 0, parsed.act))
+}
+
+const probeIds = numericAvatars.map((avatar) => {
+  const character = Number(avatar.id) - 10_000_000
+  return questId(character, (actsByCharacter.get(character) || 0) + 1)
+})
+const detailCache = new Map()
+const probeResults = await mapLimit(probeIds, 8, async (id) => {
+  const detail = await yatta(`CHS/quest/${id}`, { allowNotFound:true })
+  if (detail?.info?.type === 'hq') detailCache.set(`CHS:${id}`, detail)
+  return detail?.info?.type === 'hq' ? id : null
+})
+const discovered = probeResults.filter(Boolean)
+const ids = [...new Set([...previous.items.map((item) => item.id), ...discovered])]
+
+const loadQuest = async (lang, id) => {
+  const key = `${lang}:${id}`
+  if (!detailCache.has(key)) detailCache.set(key, await yatta(`${lang}/quest/${id}`, { allowNotFound:true }))
+  return detailCache.get(key)
+}
+const items = (await mapLimit(ids, 6, async (id) => {
+  const old = previousById.get(id)
+  try {
+    const [zh, en] = await Promise.all([loadQuest('CHS', id), loadQuest('EN', id)])
+    if (zh?.info?.type !== 'hq' || en?.info?.type !== 'hq') return old || null
+    const parsed = identity(id)
+    const avatar = avatarByCode.get(parsed?.character)
+    const version = old?.version || curatedVersions[id] || null
+    const chapterCount = Math.max(Object.keys(zh.storyList || {}).length, Object.keys(en.storyList || {}).length)
+    return {
+      id,
+      type:'hq',
+      title:{ zh:zh.info.chapterTitle, en:en.info.chapterTitle },
+      chapter:{ zh:zh.info.chapterNum, en:en.info.chapterNum },
+      imageTitle:{ zh:zh.info.chapterImageTitle, en:en.info.chapterImageTitle },
+      route:en.info.route || zh.info.route || '',
+      chapterCount,
+      icon:zh.info.chapterIcon || en.info.chapterIcon || null,
+      nation:regionNation[avatar?.zh?.region || avatar?.en?.region] || old?.nation || 'unknown',
+      nationSource:avatar ? 'yatta-avatar' : old?.nationSource || 'unknown',
+      version,
+      versionSource:version ? old?.versionSource || 'curated' : 'unknown',
+      versionGroup:version?.split('.')[0] || 'unknown',
+      wikiPage:old?.wikiPage || null,
+      hidden:false,
+      unreleased:false,
+      languages:{ zh:true, en:true },
+      sourceUrl:`https://gi.yatta.moe/chs/archive/quest/${id}`,
+      verificationUrl:`https://gensh.honeyhunterworld.com/ch_${id}/?lang=CHS`,
+    }
+  } catch (error) {
+    if (old) {
+      console.warn(`Hangout ${id} retained from snapshot: ${error.message}`)
+      return old
+    }
+    throw error
+  }
+})).filter(Boolean)
+
+if (items.length < Math.max(19, previous.items.length)) throw new Error(`Hangout validation failed: expected at least ${Math.max(19, previous.items.length)}, received ${items.length}`)
+if (new Set(items.map((item) => item.id)).size !== items.length) throw new Error('Hangout validation failed: duplicate IDs')
+
+await mkdir(resolve('public/data'), { recursive:true })
+const result = await writeStableSnapshot(output, {
+  schemaVersion:2,
+  generatedAt:new Date().toISOString(),
+  source:'Project Amber / Yatta; Honey Hunter World verification',
+  discovery:{ strategy:'Yatta avatar-to-Hangout ID probing', checkedCharacters:numericAvatars.length },
+  items,
+})
+console.log(`${result.semanticChanged ? 'Updated' : 'Checked'} ${items.length} Hangout Event chapters; probed ${numericAvatars.length} character slots and discovered ${discovered.length} new chapter(s).`)

@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { writeStableSnapshot } from './lib/data-update.mjs'
 
 const ROOT = 'https://gi.yatta.moe/api/v2'
 const clean = (value = '') => String(value || '').replace(/\$(?:HIDDEN|UNRELEASED)/g, '').trim()
@@ -170,5 +171,5 @@ const catalog = {
 
 const output = resolve('public/data')
 await mkdir(output, { recursive: true })
-await writeFile(resolve(output, 'catalog.json'), `${JSON.stringify(catalog)}\n`, 'utf8')
-console.log(`Saved ${items.length} bilingual quest records; ${items.filter((item) => item.version).length} have exact release versions.`)
+const result = await writeStableSnapshot(resolve(output, 'catalog.json'), catalog)
+console.log(`${result.semanticChanged ? 'Updated' : 'Checked'} ${items.length} bilingual quest records; ${items.filter((item) => item.version).length} have exact release versions.`)

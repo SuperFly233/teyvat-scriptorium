@@ -1,7 +1,7 @@
 {
   "name": "teyvat-scriptorium",
   "private": true,
-  "version": "0.8.7",
+  "version": "0.8.8",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,8 @@
     "data:fetch": "node scripts/fetch-quest.mjs 1700",
     "data:catalog": "node --use-env-proxy scripts/fetch-catalog.mjs",
     "data:hangouts": "node --use-env-proxy scripts/fetch-hangouts.mjs",
-    "data:update": "npm run data:catalog && npm run data:hangouts && npm run data:fetch",
+    "data:update": "node scripts/update-data.mjs",
+    "data:validate": "node scripts/validate-data.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "qa:print": "npm run build && node scripts/qa-print.mjs",
