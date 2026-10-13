@@ -1,0 +1,54 @@
+/* Reading aids share the existing paper palette and stay out of printed pages. */
+.reading-shelf { max-width: 1180px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid var(--line); }
+.reading-shelf a, .reading-shelf button, .reader-study-tools button, .reading-dialog-actions button { display: inline-flex; gap: 7px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); background: var(--paper-2); color: var(--ink); border-radius: 6px; font: inherit; font-size: 14px; text-decoration: none; }
+.reading-shelf a { min-width: 0; max-width: 100%; }
+.reading-shelf a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reader-study-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.reader-study-tools label { display: flex; align-items: center; gap: 7px; font-size: 14px; }
+.reader-study-tools select { max-width: 130px; padding: 8px; font: inherit; background: var(--paper-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+.line-reading-actions { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 8px; }
+.line-reading-actions button { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 4px 7px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; border-radius: 4px; }
+.line-reading-actions button:hover, .line-reading-actions button[aria-pressed=true] { background: var(--paper-3); color: var(--red); }
+.line-reading-actions button:focus-visible, .reader-study-tools button:focus-visible, .reading-dialog button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.dialogue-row.shared-line { box-shadow: inset 3px 0 var(--red); background: color-mix(in srgb, var(--red) 8%, var(--paper-2)); }
+.script[data-study=CHS] .dialogue-row:not(.study-revealed) .utterance[data-language=CHS] p,
+.script[data-study=CHT] .dialogue-row:not(.study-revealed) .utterance[data-language=CHT] p,
+.script[data-study=EN] .dialogue-row:not(.study-revealed) .utterance[data-language=EN] p,
+.script[data-study=JP] .dialogue-row:not(.study-revealed) .utterance[data-language=JP] p,
+.script[data-study=KR] .dialogue-row:not(.study-revealed) .utterance[data-language=KR] p,
+.script[data-study=DE] .dialogue-row:not(.study-revealed) .utterance[data-language=DE] p,
+.script[data-study=ES] .dialogue-row:not(.study-revealed) .utterance[data-language=ES] p,
+.script[data-study=FR] .dialogue-row:not(.study-revealed) .utterance[data-language=FR] p,
+.script[data-study=ID] .dialogue-row:not(.study-revealed) .utterance[data-language=ID] p,
+.script[data-study=PT] .dialogue-row:not(.study-revealed) .utterance[data-language=PT] p,
+.script[data-study=RU] .dialogue-row:not(.study-revealed) .utterance[data-language=RU] p,
+.script[data-study=TH] .dialogue-row:not(.study-revealed) .utterance[data-language=TH] p,
+.script[data-study=VI] .dialogue-row:not(.study-revealed) .utterance[data-language=VI] p,
+.script[data-study=IT] .dialogue-row:not(.study-revealed) .utterance[data-language=IT] p,
+.script[data-study=TR] .dialogue-row:not(.study-revealed) .utterance[data-language=TR] p { visibility: hidden; }
+.reading-dialog { width: min(640px, calc(100vw - 28px)); max-height: min(85vh, 900px); box-sizing: border-box; overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); color: var(--ink); box-shadow: var(--shadow); }
+.reading-dialog::backdrop { background: rgb(12 22 20 / 55%); }
+.reading-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.reading-dialog header h2 { margin: 0; font-size: 23px; }
+.reading-dialog header button { padding: 8px; border: 0; background: transparent; color: var(--ink); }
+.reading-dialog p, .reading-dialog blockquote { overflow-wrap: anywhere; white-space: pre-wrap; }
+.reading-dialog blockquote { margin: 16px 0; padding: 12px; border-left: 2px solid var(--red); background: var(--paper-3); }
+.note-field { display: grid; gap: 8px; margin: 16px 0; font-size: 14px; }
+.reading-dialog input, .reading-dialog textarea, .reading-dialog select { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
+.reading-dialog textarea { min-height: 150px; resize: vertical; }
+.reading-dialog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
+.reading-help, .reading-dialog-actions span { color: var(--muted); font-size: 14px; }
+.reading-recent a { display: block; padding: 10px 0; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--line); }
+.reading-recent small { display: block; color: var(--muted); }
+.reading-saved-list article { padding: 14px 0; border-top: 1px solid var(--line); }
+.reading-saved-list a { color: var(--ink); text-decoration: none; }
+.saved-note { padding: 10px; border-radius: 6px; background: var(--paper-3); }
+.reading-notice, .reading-storage-warning { position: fixed; z-index: 10000; bottom: 100px; left: 50%; transform: translateX(-50%); max-width: min(600px, calc(100vw - 32px)); padding: 12px 18px; background: var(--green); color: white; border-radius: 8px; font-size: 14px; box-shadow: var(--shadow); }
+.reading-storage-warning { bottom: 150px; background: var(--red-2); }
+@media screen and (max-width: 620px) {
+  .reader-study-tools { gap: 8px; }
+  .reader-study-tools label { order: 3; width: 100%; }
+  .line-reading-actions button { min-height: 36px; }
+  .reading-dialog { padding: 18px; }
+}
+@media print { .reading-shelf, .reader-study-tools, .line-reading-actions, .reading-dialog, .reading-notice, .reading-storage-warning { display: none !important; } }

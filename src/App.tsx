@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   forwardRef,
   useDeferredValue,
   useEffect,
@@ -55,6 +57,7 @@ import { filterScenes } from "./lib/filter";
 import { enrichBranches } from "./lib/branches";
 import { buildPrintMeta } from "./lib/printMeta";
 import { formatGameText, normalizeSearch } from "./lib/text";
+import { ReadingProvider, ReadingShelf, ReaderTools, LineTools, useStudyLanguage } from './components/ReadingTools';
 import type {
   AppSettings,
   CatalogData,
@@ -208,7 +211,8 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.8.8";
+const APP_VERSION = "v0.9.0";
+const DialogueContext = createContext<{ data: ChapterData; questId: number } | null>(null);
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
   "mondstadt",
@@ -358,6 +362,13 @@ const compareSeriesItems = (a: CatalogItem, b: CatalogItem) =>
   structuralSeriesOrder(a) - structuralSeriesOrder(b) ||
   a.id - b.id;
 
+function readStorage(key: string, session = false) {
+  try { return (session ? sessionStorage : localStorage).getItem(key); } catch { return null; }
+}
+function writeStorage(key: string, value: string, session = false) {
+  try { (session ? sessionStorage : localStorage).setItem(key, value); } catch { /* optional preferences remain available in memory */ }
+}
+
 function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(() => {
     try {
@@ -370,7 +381,7 @@ function useStoredState<T>(key: string, initial: T) {
     }
   });
   useEffect(() => {
-    localStorage.setItem(key, JSON.stringify(value));
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* keep settings usable when storage is full or blocked */ }
   }, [key, value]);
   return [value, setValue] as const;
 }
@@ -394,6 +405,9 @@ function useSessionState<T>(key: string, initial: T) {
 }
 
 function useData(dataSource: AppSettings["dataSource"] = "auto") {
+  const requestRef = useRef<AbortController | null>(null);
+  const cancelLoad = () => { requestRef.current?.abort(); requestRef.current = null; setLoading(false); };
+  useEffect(() => () => requestRef.current?.abort(), []);
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -530,6 +544,9 @@ function useData(dataSource: AppSettings["dataSource"] = "auto") {
     languages: LanguageCode[] = ["CHS", "EN"],
     source: AppSettings["dataSource"] = dataSource,
   ) {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError("");
     setLoadProgress({
@@ -543,18 +560,17 @@ function useData(dataSource: AppSettings["dataSource"] = "auto") {
     });
     try {
       const languageKey = languages.slice(0, 3).join(",");
-      const cached = sessionStorage.getItem(
-        `chapter:v2:${id}:${languageKey}:${source}`,
-      );
+      let cached: string | null = null;
+      try { cached = sessionStorage.getItem(`chapter:v2:${id}:${languageKey}:${source}`); } catch { /* unavailable storage must not block network loading */ }
       if (cached) {
-        setChapter(normalizeChapterData(JSON.parse(cached)));
-        return true;
+        try { setChapter(normalizeChapterData(JSON.parse(cached))); return true; }
+        catch { /* invalid cache: reload the original data */ }
       }
       const url =
         source === "yatta" && id === 1700 && languageKey === "CHS,EN"
           ? "/data/quest-1700.json"
           : `/api/quest/${id}?langs=${encodeURIComponent(languageKey)}&source=${source}`;
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: controller.signal });
       if (!response.ok)
         throw new Error(
           response.status === 404
@@ -590,6 +606,7 @@ function useData(dataSource: AppSettings["dataSource"] = "auto") {
         data = JSON.parse(new TextDecoder().decode(bytes)) as ChapterData;
       } else data = (await response.json()) as ChapterData;
       data = normalizeChapterData(data);
+      if (controller.signal.aborted) return false;
       data.source.strategy ||= source;
       data.source.notice ||=
         source === "yatta"
@@ -606,13 +623,15 @@ function useData(dataSource: AppSettings["dataSource"] = "auto") {
       }
       return true;
     } catch (e) {
+      if (controller.signal.aborted) return false;
       setError(e instanceof Error ? e.message : String(e));
       return false;
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) setLoading(false);
     }
   }
   return {
+    cancelLoad,
     catalog,
     catalogSync,
     chapter,
@@ -742,7 +761,7 @@ function Catalog({
   const [guideVisible, setGuideVisible] = useState(
     () =>
       settings.guideCatalog &&
-      localStorage.getItem("teyvat:catalog-guide:v1") !== "done",
+      readStorage("teyvat:catalog-guide:v1") !== "done",
   );
   useEffect(() => {
     if (guideRequest) setGuideVisible(true);
@@ -763,10 +782,10 @@ function Catalog({
     };
   }, []);
   useEffect(() => {
-    const saved = Number(sessionStorage.getItem("teyvat:catalog:scroll") || 0);
+    const saved = Number(readStorage("teyvat:catalog:scroll", true) || 0);
     requestAnimationFrame(() => scrollTo(0, saved));
     return () =>
-      sessionStorage.setItem("teyvat:catalog:scroll", String(scrollY));
+      writeStorage("teyvat:catalog:scroll", String(scrollY), true);
   }, []);
   const items = useMemo(() => {
     const needle = normalizeSearch(deferredQuery);
@@ -906,7 +925,7 @@ function Catalog({
               </div>
               <button
                 onClick={() => {
-                  localStorage.setItem("teyvat:catalog-guide:v1", "done");
+                  writeStorage("teyvat:catalog-guide:v1", "done");
                   setGuideVisible(false);
                 }}
               >
@@ -1628,7 +1647,11 @@ function Reader({
     open: (item: CatalogItem) => void;
   };
 }) {
-  const [questId, setQuestId] = useState(data.quests[0]?.id);
+  const [questId, setQuestId] = useState(() => {
+    const requested = Number(new URLSearchParams(location.search).get('quest'));
+    return data.quests.some(quest => quest.id === requested) ? requested : data.quests[0]?.id;
+  });
+  const studyLanguage = useStudyLanguage();
   const [sceneKeys, setSceneKeys] = useState<Set<string>>(new Set());
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
@@ -1645,7 +1668,7 @@ function Reader({
   const [guideOpen, setGuideOpen] = useState(
     () =>
       settings.guideReader !== false &&
-      localStorage.getItem("teyvat:reader-guide:v1") !== "done",
+      readStorage("teyvat:reader-guide:v1") !== "done",
   );
   const [guideStep, setGuideStep] = useState(0);
   const scriptRef = useRef<HTMLDivElement>(null);
@@ -1702,7 +1725,7 @@ function Reader({
     setSelectedLines(new Set());
     setSpeakerKeys(new Set(availableSpeakers.map((speaker) => speaker.key)));
     setQuery("");
-  }, [activeQuest.id, availableSpeakers]);
+  }, [data.chapter.id, activeQuest.id]);
   useEffect(() => {
     if (guideRequest > 0) {
       setGuideStep(0);
@@ -1855,7 +1878,7 @@ function Reader({
     window.setTimeout(scrollToScene, 650);
   };
   const closeGuide = () => {
-    localStorage.setItem("teyvat:reader-guide:v1", "done");
+    writeStorage("teyvat:reader-guide:v1", "done");
     setGuideOpen(false);
   };
   const applyReaderWidths = (widths: number[]) => {
@@ -2438,8 +2461,10 @@ function Reader({
               </button>
             </div>
           )}
+          <ReaderTools data={data} quest={activeQuest} scenes={scenes} selected={selectedLines} languages={activeLanguages} traveler={traveler}/>
           <div
             ref={scriptRef}
+            data-study={studyLanguage}
             data-language-count={activeLanguages.length}
             className={`script script-${settings.viewMode} ${selectionMode ? "is-selecting" : ""}`}
             style={
@@ -2480,6 +2505,7 @@ function Reader({
                 {scenes.length} 个场景 · {visibleLineKeys.length} 句
               </span>
             </div>
+            <DialogueContext.Provider value={{ data, questId: activeQuest.id }}>
             {scenes.map((scene, sceneIndex) => (
               <SceneBlock
                 key={scene.key}
@@ -2499,6 +2525,7 @@ function Reader({
                 showGuide={settings.guideScenes !== false}
               />
             ))}
+            </DialogueContext.Provider>
             {!scenes.length && <Empty title="没有可显示的台词" />}
           </div>
         </section>
@@ -2572,7 +2599,7 @@ function SceneBlock({
 }) {
   const guideKey = `teyvat:scene-guide:${scene.key}`;
   const [tipVisible, setTipVisible] = useState(
-    () => showGuide && sessionStorage.getItem(guideKey) !== "done",
+    () => showGuide && readStorage(guideKey, true) !== "done",
   );
   const blocks: React.ReactNode[] = [];
   const renderedBranchGroups = new Set<string>();
@@ -2830,7 +2857,7 @@ function SceneBlock({
           <button
             aria-label="关闭本场景提示"
             onClick={() => {
-              sessionStorage.setItem(guideKey, "done");
+              writeStorage(guideKey, "done", true);
               setTipVisible(false);
             }}
           >
@@ -2845,12 +2872,12 @@ function SceneBlock({
 
 function HighlightText({ text, query }: { text: string; query: string }) {
   if (!query.trim()) return <>{text || "—"}</>;
-  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = Array.from(query.replace(/\s+/g, '')).map(char => char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join('\\s*');
   const parts = text.split(new RegExp(`(${escaped})`, "ig"));
   return (
     <>
       {parts.map((part, index) =>
-        part.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) ? (
+        index % 2 === 1 ? (
           <mark key={index}>{part}</mark>
         ) : (
           part
@@ -2888,6 +2915,7 @@ function DialogueRow({
   match: boolean;
   focused: boolean;
 }) {
+  const reading = useContext(DialogueContext);
   const activate = (event: React.MouseEvent | React.KeyboardEvent) => {
     if (
       !selecting ||
@@ -2904,7 +2932,7 @@ function DialogueRow({
       tabIndex={selecting ? 0 : undefined}
       onClick={activate}
       onKeyDown={(event) => {
-        if (selecting && (event.key === "Enter" || event.key === " ")) {
+        if (selecting && event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
           toggle();
         }
@@ -2936,6 +2964,7 @@ function DialogueRow({
           {languages.map((lang) => (
             <div
               className="utterance"
+              data-language={lang}
               lang={languageInfo(lang).locale}
               key={lang}
             >
@@ -2959,6 +2988,7 @@ function DialogueRow({
         {line.kind === "narration" && (
           <em className="choice-label">画面文字</em>
         )}
+        {reading && <LineTools data={reading.data} questId={reading.questId} line={line}/>}
       </div>
     </article>
   );
@@ -4683,6 +4713,16 @@ function Modal({
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
             <article>
+              <span>v0.9.0 · 2026-10-13</span>
+              <h3>阅读资料与语言练习</h3>
+              <ul>
+                <li>逐句收藏、可编辑笔记及搜索资料库，支持备份和合并导入。</li>
+                <li>自动记录阅读位置，可从目录继续阅读；分享链接准确定位台词。</li>
+                <li>新增遮译自测与逐句揭晓，以及 Markdown / TSV 台词导出。</li>
+                <li>修复请求竞态、存储异常、切换语言丢失选句及键盘误选；搜索高亮与匹配一致。</li>
+              </ul>
+            </article>
+            <article>
               <span>v0.8.8 · 2026-08-20</span>
               <h3>自动资料更新可靠性修复</h3>
               <ul>
@@ -4995,11 +5035,15 @@ function Changelog({ onClose }: { onClose: () => void }) {
 }
 
 export default function App() {
+  return <ReadingProvider><AppContent/></ReadingProvider>;
+}
+function AppContent() {
   const [settings, setSettings] = useStoredState<AppSettings>(
     "teyvat:settings:v5",
     DEFAULT_SETTINGS,
   );
   const {
+    cancelLoad,
     catalog,
     catalogSync,
     chapter,
@@ -5067,6 +5111,7 @@ export default function App() {
       )
         setPage("reader");
     } else {
+      cancelLoad();
       setPage("catalog");
       setChapter(null);
       setError("");
@@ -5135,6 +5180,7 @@ export default function App() {
     }
   };
   const goCatalog = () => {
+    cancelLoad();
     if (page === "catalog" && !location.search.includes("chapter=")) return;
     history.pushState(
       { teyvat: true, page: "catalog", fromCatalog: false },
@@ -5274,13 +5320,13 @@ export default function App() {
         onChangelog={() => setChangelogOpen(true)}
       />
       {page === "catalog" && catalog && (
-        <Catalog
+        <><ReadingShelf/><Catalog
           data={catalog}
           settings={settings}
           onOpen={openItem}
           sync={catalogSync}
           guideRequest={guideRequest}
-        />
+        /></>
       )}
       {page === "catalog" && !catalog && !error && (
         <div className="loading-page">
@@ -5290,6 +5336,7 @@ export default function App() {
       )}
       {page === "reader" && chapter && (
         <Reader
+          key={chapter.chapter.id}
           data={chapter}
           settings={settings}
           setSettings={setSettings}

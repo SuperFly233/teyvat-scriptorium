@@ -5,6 +5,7 @@ import '@fontsource/noto-serif-sc/400.css'
 import '@fontsource/noto-serif-sc/600.css'
 import App from './App'
 import './styles.css'
+import './components/reading-tools.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
