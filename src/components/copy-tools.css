@@ -40,6 +40,10 @@
 .copy-settings-footer { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
 .copy-order-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 10px; }
 .copy-more summary { cursor: pointer; color: var(--muted); padding-block: 8px; }
+.copy-language-styles fieldset { min-width: 0; margin: 10px 0; padding: 10px; border: 1px solid var(--line); border-radius: 5px; }
+.copy-language-styles legend { padding-inline: 5px; font-size: 13px; }
+.copy-language-styles .copy-settings-grid { margin: 0; }
+.copy-help { color: var(--muted); font-size: 12px; }
 .copy-dialog-footer { position: sticky; bottom: -24px; z-index: 2; margin-top: 12px; padding: 12px 0; background: var(--paper-2); }
 .copy-dialog-footer > p { margin: 4px 0 0; font-size: 12px; }
 .copy-dialog .copy-confirm { display: flex; margin: 18px 0 0 auto; background: var(--green); color: white; padding: 10px 16px; }

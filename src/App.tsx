@@ -212,7 +212,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.10.0";
+const APP_VERSION = "v0.10.1";
 const DialogueContext = createContext<{ data: ChapterData; questId: number } | null>(null);
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
@@ -4723,6 +4723,15 @@ function Modal({
         </header>
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
+            <article>
+              <span>v0.10.1 · 2026-10-23</span>
+              <h3>按语言复制格式</h3>
+              <ul>
+                <li>默认按语言选择名字分隔符：中文全角冒号，英文半角冒号加空格，法文保留冒号前不换行空格。</li>
+                <li>每种语言可独立设置名字开关和分隔符，也可统一格式。</li>
+                <li>精简复制选项说明，保留旧的自定义分隔符，升级原默认格式。</li>
+              </ul>
+            </article>
             <article>
               <span>v0.10.0 · 2026-10-23</span>
               <h3>逐句复制与自定义格式</h3>
