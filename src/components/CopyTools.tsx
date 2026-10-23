@@ -57,7 +57,7 @@ export function CopySettings({ languages, blocks, traveler = 'aether' }: { langu
     const next = [...visibleOrder]; const index = next.indexOf(language); [next[index], next[index + offset]] = [next[index + offset], next[index]];
     change({ languages: [...next, ...prefs.languages.filter(lang => !languages.includes(lang))] })
   }
-  const example: CopyBlock[] = blocks || [{ speaker: { zh: '派蒙', en: 'Paimon', translations: { JP: 'パイモン' } }, text: { zh: '你好，旅行者。', en: 'Hello, Traveler.', translations: { JP: 'こんにちは、旅人。' } } }]
+  const example: CopyBlock[] = blocks || [{ speaker: { zh: '派蒙', en: 'Paimon', translations: { JP: 'パイモン' } }, text: { zh: '你好，旅行者。', en: 'Hello, Traveler.', translations: { JP: 'こんにちは、旅人。' } } }, {speaker:{zh:'旅行者',en:'Traveler',translations:{JP:'旅人'}},text:{zh:'我们出发吧。',en:"Let's go.",translations:{JP:'出発しよう。'}}}]
   return <section className="copy-settings" aria-label="复制格式设置">
     <label className="copy-check"><input type="checkbox" checked={prefs.followReader} onChange={event => change({ followReader: event.target.checked })}/>语言和顺序跟随阅读</label>
     {currentOrder.length > 1 && currentOrder.some(isChinese) && <div className="copy-order-shortcuts"><span>复制顺序</span><button onClick={() => change({ followReader: false, languages: [...currentOrder.filter(isChinese), ...currentOrder.filter(lang => !isChinese(lang))] })}>中文在前</button><button onClick={() => change({ followReader: false, languages: [...currentOrder.filter(lang => !isChinese(lang)), ...currentOrder.filter(isChinese)] })}>中文在后</button></div>}
@@ -82,24 +82,29 @@ export function CopySettings({ languages, blocks, traveler = 'aether' }: { langu
       </fieldset> })}
       {languages.some(language => prefs.languageStyles[language]) && <button onClick={() => { const styles = { ...prefs.languageStyles }; languages.forEach(language => delete styles[language]); change({ languageStyles: styles }); setResetVersion(value => value + 1) }}>清除这些语言的单独设置</button>}
     </details>
+    <details className="copy-more copy-multiple"><summary>多段复制</summary>
+      <p className="copy-help">每条台词算一段，按剧情顺序复制。各语言的名字格式保持不变。</p>
+      <div className="copy-settings-grid">
+        <label className="copy-field">多段排列<select aria-label="多段排列" value={prefs.grouping} onChange={event => change({ grouping: event.target.value as CopyPreferences['grouping'] })}><option value="sentence">逐段对照</option><option value="language">按语言分组</option></select></label>
+        <Separator key={`sentence-${resetVersion}`} label="段落分隔" value={prefs.sentenceSeparator} change={sentenceSeparator => change({ sentenceSeparator })}/>
+      </div>
+    </details>
     <details className="copy-more"><summary>更多排版选项</summary><div className="copy-settings-grid">
       <label className="copy-check"><input type="checkbox" checked={prefs.languageLabels} onChange={event => change({ languageLabels: event.target.checked })}/>标注语言代码</label>
       <label className="copy-check"><input type="checkbox" checked={prefs.preserveBreaks} onChange={event => change({ preserveBreaks: event.target.checked })}/>保留正文内换行</label>
-      <label className="copy-field">多句排列<select aria-label="多句排列" value={prefs.grouping} onChange={event => change({ grouping: event.target.value as CopyPreferences['grouping'] })}><option value="sentence">逐句对照</option><option value="language">按语言分组</option></select></label>
-      <Separator key={`sentence-${resetVersion}`} label="句子分隔" value={prefs.sentenceSeparator} change={sentenceSeparator => change({ sentenceSeparator })}/>
     </div></details>
     <label className="copy-field">复制预览<textarea aria-label="复制预览" readOnly value={formatCopy(example, languages, prefs, traveler)} onFocus={event => event.target.select()}/></label>
     <div className="copy-settings-footer"><small>自动保存 · 仅复制已载入语言</small><button onClick={() => { setPrefs(normalizeCopy(DEFAULT_COPY)); setResetVersion(value => value + 1) }}>恢复默认格式</button></div>
   </section>
 }
-export function CopyButton({ blocks, languages, traveler = 'aether', label = '复制', only, compact = false, options = true }: {
-  blocks: CopyBlock[]; languages: LanguageCode[]; traveler?: Traveler; label?: string; only?: LanguageCode; compact?: boolean; options?: boolean;
+export function CopyButton({ blocks, languages, traveler = 'aether', label = '复制', only, compact = false, options = true, disabled = false }: {
+  blocks: CopyBlock[]; languages: LanguageCode[]; traveler?: Traveler; label?: string; only?: LanguageCode; compact?: boolean; options?: boolean; disabled?: boolean;
 }) {
   const { prefs, copy, message } = useContext(CopyContext)!
   const [open, setOpen] = useState(false)
   return <span className={`copy-control ${compact ? 'copy-compact' : ''}`}>
-    <button type="button" aria-label={label} title={label} onClick={() => copy(formatCopy(blocks, languages, prefs, traveler, only))}><Copy size={14}/>{!compact && <span>{label}</span>}</button>
-    {options && !only && <button type="button" className="copy-options-button" aria-label={`${label}的格式选项`} title="复制格式选项" onClick={() => setOpen(true)}><ChevronDown size={13}/></button>}
+    <button type="button" disabled={disabled} aria-label={label} title={label} onClick={() => copy(formatCopy(blocks, languages, prefs, traveler, only))}><Copy size={14}/>{!compact && <span>{label}</span>}</button>
+    {options && !only && <button type="button" disabled={disabled} className="copy-options-button" aria-label={`${label}的格式选项`} title="复制格式选项" onClick={() => setOpen(true)}><ChevronDown size={13}/></button>}
     {open && <CopyDialog title="复制选项" close={() => setOpen(false)}>
       <CopySettings languages={languages} blocks={blocks} traveler={traveler}/>
       <div className="copy-dialog-footer"><button className="copy-confirm" onClick={() => copy(formatCopy(blocks, languages, prefs, traveler))}><Copy size={16}/>复制预览内容</button>

@@ -212,7 +212,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.10.1";
+const APP_VERSION = "v0.10.2";
 const DialogueContext = createContext<{ data: ChapterData; questId: number } | null>(null);
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
@@ -1808,6 +1808,7 @@ function Reader({
     );
   }, [matchIndex, matchKeys, deferredQuery, searchMode]);
   const visibleLineKeys = scenes.flatMap((s) => s.lines.map((l) => l.key));
+  const selectedCopyBlocks = useMemo(() => activeQuest.scenes.flatMap(scene => scene.lines.filter(line => selectedLines.has(line.key)).map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker }))), [activeQuest, selectedLines]);
   const selectedVisible = visibleLineKeys.filter((key) =>
     selectedLines.has(key),
   ).length;
@@ -2440,13 +2441,13 @@ function Reader({
               </button>
               <div className="selection-status">
                 <span>当前已选</span>
-                <strong>{selectedVisible}</strong>
-                <span>共 {visibleLineKeys.length} 句</span>
+                <strong>{selectedCopyBlocks.length}</strong>
+                <span>{selectedCopyBlocks.length !== selectedVisible ? `含 ${selectedCopyBlocks.length - selectedVisible} 段筛选外台词` : '段台词'}</span>
               </div>
               <div className="selection-secondary">
                 <button
-                  disabled={!selectedVisible}
-                  onClick={() => setVisible(false)}
+                  disabled={!selectedCopyBlocks.length}
+                  onClick={() => setSelectedLines(new Set())}
                 >
                   <Eraser size={16} />
                   清空
@@ -2456,6 +2457,7 @@ function Reader({
                   完成
                 </button>
               </div>
+              <span className="selection-copy"><CopyButton label="复制这些文本" disabled={!selectedCopyBlocks.length} blocks={selectedCopyBlocks} languages={activeLanguages} traveler={traveler}/></span>
               <button
                 className="queue-inline"
                 disabled={!selectedVisible}
@@ -3222,7 +3224,7 @@ function SettingsSheet({
           />
         </SettingRow>
         <SettingRow title="复制与粘贴">
-          <CopySettings languages={value.languages || ['CHS','EN']} blocks={chapter?.quests[0]?.scenes[0]?.lines.slice(0, 2).map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker }))}/>
+          <CopySettings languages={value.languages || ['CHS','EN']} blocks={chapter?.quests[0]?.scenes.flatMap(scene => scene.lines).slice(0, 2).map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker }))}/>
         </SettingRow>
         <SettingRow title="字体">
           <Segment
@@ -4723,6 +4725,16 @@ function Modal({
         </header>
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
+            <article>
+              <span>v0.10.2 · 2026-10-24</span>
+              <h3>多选与多段复制</h3>
+              <ul>
+                <li>选句操作条新增“复制这些文本”，支持不连续多选，按剧情顺序复制。</li>
+                <li>设置中单列“多段复制”，可选逐段对照、按语言分组和段落分隔。</li>
+                <li>显示全部已选数量及筛选外台词提示；清空会取消全部选择。</li>
+                <li>手机选句操作条分两行，复制与选稿按钮保持可见。</li>
+              </ul>
+            </article>
             <article>
               <span>v0.10.1 · 2026-10-23</span>
               <h3>按语言复制格式</h3>

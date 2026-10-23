@@ -85,6 +85,31 @@ try {
   await row().getByRole('button',{name:'复制这句台词',exact:true}).click(); assert.equal(await clipboard(),`${enName}: ${en}\n${zhName}：${zh}`)
   await page.locator('.selection-toggle').click(); await row().locator('.line-select').click()
   await page.getByRole('button',{name:'复制已选台词（1）',exact:true}).click(); assert.equal(await row().getAttribute('aria-checked'),'true'); assert.equal(await clipboard(),`${enName}: ${en}\n${zhName}：${zh}`)
+  // Copy non-adjacent selections in story order, with configurable multi-paragraph layout.
+  await page.locator('.selection-secondary').getByRole('button',{name:'清空',exact:true}).click()
+  assert.equal(await page.getByRole('button',{name:'复制这些文本',exact:true}).isDisabled(),true)
+  const third=page.locator('.dialogue-row').nth(2)
+  const rendered=async (target,language)=>{
+    const cell=target.locator(`[data-language=${language}]`);const text=await cell.locator('p').innerText();const name=await cell.locator('strong').count()?await cell.locator('strong').innerText():'';
+    return name?`${name}${language==='CHS'?'：':': '}${text}`:text;
+  }
+  const firstEN=await rendered(row(),'EN'),firstCHS=await rendered(row(),'CHS'),thirdEN=await rendered(third,'EN'),thirdCHS=await rendered(third,'CHS')
+  await third.locator('.line-select').click();await row().locator('.line-select').click()
+  await page.getByRole('button',{name:'复制这些文本',exact:true}).click()
+  assert.equal(await clipboard(),`${firstEN}\n${firstCHS}\n\n${thirdEN}\n${thirdCHS}`)
+  await page.getByRole('button',{name:'复制这些文本的格式选项',exact:true}).click()
+  await copyOptions().getByText('多段复制',{exact:true}).click()
+  await copyOptions().getByLabel('多段排列',{exact:true}).selectOption('language')
+  await copyOptions().getByLabel('段落分隔',{exact:true}).selectOption('__custom')
+  await copyOptions().getByLabel('自定义段落分隔',{exact:true}).fill(' / ')
+  const multiExpected=`${firstEN} / ${thirdEN}\n${firstCHS} / ${thirdCHS}`
+  assert.equal(await copyOptions().getByLabel('复制预览').inputValue(),multiExpected)
+  await copyOptions().getByRole('button',{name:'复制预览内容'}).click();assert.equal(await clipboard(),multiExpected)
+  await close();await page.setViewportSize({width:390,height:844});await page.waitForTimeout(400)
+  const multiCopyBox=await page.getByRole('button',{name:'复制这些文本',exact:true}).boundingBox();assert.ok(multiCopyBox.x>=0&&multiCopyBox.x+multiCopyBox.width<=390&&multiCopyBox.y>=0&&multiCopyBox.y+multiCopyBox.height<=844)
+  assert.ok(await noOverflow());await page.screenshot({path:'artifacts/multiple-copy-mobile.png'})
+  await page.setViewportSize({width:1440,height:900});await page.waitForTimeout(400);await page.screenshot({path:'artifacts/multiple-copy-desktop.png'})
+  await page.getByRole('button',{name:'复制这些文本的格式选项',exact:true}).click();await copyOptions().getByRole('button',{name:'恢复默认格式'}).click();await close()
   await row().getByRole('button',{name:'复制这句台词的格式选项',exact:true}).focus(); await page.keyboard.press('Enter'); assert.equal(await row().getAttribute('aria-checked'),'true')
   const desktopDialog = await copyOptions().boundingBox(); assert.ok(desktopDialog.x >= 0 && desktopDialog.x + desktopDialog.width <= 1440)
   await page.screenshot({path:'artifacts/copy-options-desktop.png'})
@@ -104,6 +129,9 @@ try {
   assert.equal(await manual.getByLabel('待复制文本').evaluate(element=>element.selectionEnd-element.selectionStart),`${enName}: ${en}`.length)
   await page.keyboard.press('Escape')
   await page.getByRole('button',{name:'设置',exact:true}).click(); await page.locator('.settings-list .copy-settings').waitFor()
+  await page.locator('.settings-list .copy-settings').getByText('多段复制',{exact:true}).click()
+  await page.locator('.settings-list .copy-settings').getByLabel('多段排列',{exact:true}).selectOption('language')
+  assert.equal(await page.locator('.settings-list .copy-settings').getByLabel('多段排列',{exact:true}).inputValue(),'language')
   await page.locator('.settings-list .copy-settings').getByLabel('包含角色名字').uncheck()
   await page.emulateMedia({media:'print'}); assert.equal(await row().locator('.copy-control').first().evaluate(element=>getComputedStyle(element).display),'none'); await page.emulateMedia({media:'screen'})
   assert.deepEqual(errors,[])
