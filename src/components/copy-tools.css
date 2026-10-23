@@ -1,0 +1,48 @@
+.copy-control { display: inline-flex; vertical-align: middle; align-items: center; max-width: 100%; gap: 0; }
+.copy-control > button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 5px 7px; background: transparent; color: var(--muted); border: 0; border-radius: 4px; font: inherit; font-size: 12px; cursor: pointer; }
+.copy-control > button:hover { background: var(--paper-3); color: var(--red); }
+.copy-control > .copy-options-button { padding-inline: 3px; }
+.copy-control > button:focus-visible, .copy-dialog button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.copy-compact { margin-left: 4px; }
+.copy-compact > button { min-width: 28px; min-height: 28px; padding: 5px; }
+.utterance { position: relative; }
+.utterance > .copy-control { position: absolute; top: 0; right: 2px; opacity: .65; }
+.utterance > strong { padding-right: 32px; }
+.utterance:hover > .copy-control, .utterance:focus-within > .copy-control { opacity: 1; }
+.kind-narration .utterance > .copy-control { position: static; }
+.intro-descriptions .copy-control, .scene-block > header .copy-control { font-family: inherit; }
+.reader-intro .copy-control { margin-top: 4px; }
+.reader-study-tools .copy-control > button { font-size: 13px; }
+.language-picked > span { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.language-picked button { display: inline-flex; padding: 4px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.language-picked button:disabled { opacity: .25; cursor: default; }
+.copy-dialog { width: min(660px, calc(100vw - 24px)); max-height: 88dvh; overflow: auto; box-sizing: border-box; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); color: var(--ink); box-shadow: var(--shadow); }
+.copy-dialog::backdrop { background: rgb(12 22 20 / 55%); }
+.copy-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.copy-dialog h2 { margin: 0; font-size: 22px; }
+.copy-dialog button, .copy-settings button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 9px; color: var(--ink); border: 1px solid var(--line); background: var(--paper); border-radius: 5px; font: inherit; font-size: 13px; cursor: pointer; }
+.copy-settings button:disabled { opacity: .3; cursor: default; }
+.copy-settings { min-width: 0; width: 100%; box-sizing: border-box; font-size: 14px; }
+.setting-row:has(> .copy-settings) { display: block; padding-block: 16px; }
+.setting-row:has(> .copy-settings) > div:first-child { margin-bottom: 12px; }
+.copy-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.copy-check { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.copy-check input, .copy-language-options input { width: 16px; height: 16px; flex: none; accent-color: var(--red); }
+.copy-field { display: grid; min-width: 0; gap: 7px; margin: 10px 0; font-size: 14px; }
+.copy-field select, .copy-field input, .copy-dialog textarea, .copy-field textarea { box-sizing: border-box; width: 100%; min-width: 0; padding: 9px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; font: inherit; }
+.copy-dialog textarea, .copy-field textarea { min-height: 130px; resize: vertical; white-space: pre-wrap; }
+.copy-language-options > label { display: inline-flex; align-items: center; gap: 5px; margin: 6px 12px 6px 0; }
+.copy-language-options ol { padding: 0; list-style: none; }
+.copy-language-options li { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.copy-language-options li span { flex: 1; }
+.copy-language-options p, .copy-settings small { color: var(--muted); font-size: 12px; }
+.copy-settings-footer { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.copy-order-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 10px; }
+.copy-more summary { cursor: pointer; color: var(--muted); padding-block: 8px; }
+.copy-dialog-footer { position: sticky; bottom: -24px; z-index: 2; margin-top: 12px; padding: 12px 0; background: var(--paper-2); }
+.copy-dialog-footer > p { margin: 4px 0 0; font-size: 12px; }
+.copy-dialog .copy-confirm { display: flex; margin: 18px 0 0 auto; background: var(--green); color: white; padding: 10px 16px; }
+.copy-dialog-footer .copy-confirm { margin-top: 0; }
+.copy-notice { position: fixed; bottom: 105px; left: 50%; transform: translateX(-50%); z-index: 20000; max-width: calc(100vw - 32px); padding: 12px 20px; color: white; background: var(--green); border-radius: 8px; box-shadow: var(--shadow); }
+@media (max-width: 620px) { .copy-settings-grid { grid-template-columns: minmax(0, 1fr); gap: 4px; } .copy-dialog { padding: 18px; } .copy-control > button { min-height: 34px; } .utterance > .copy-control { top: -2px; } }
+@media print { .copy-control, .copy-dialog, .copy-notice { display: none !important; } }

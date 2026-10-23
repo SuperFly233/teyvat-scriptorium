@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { Bookmark, BookOpen, Download, Eye, FileText, Share2, X } from 'lucide-react'
 import type { ChapterData, DialogueLine, LanguageCode, Quest, Scene, Traveler } from '../types'
 import { EMPTY_LIBRARY, LIBRARY_KEY, downloadText, exportDialogue, makeEntry, mergeLibrary, parseLibrary, readingLink, type ReadingEntry, type ReadingLibrary } from '../lib/reading'
+import { CopyButton } from './CopyTools'
 
 const ReadingContext = createContext<{
   library: ReadingLibrary; update: (fn: (value: ReadingLibrary) => ReadingLibrary) => void;
@@ -128,6 +129,8 @@ export function ReaderTools({ data, quest, scenes, selected, languages, traveler
       <button onClick={open}><Bookmark size={16}/>阅读资料{library.entries.length ? ` · ${library.entries.length}` : ''}</button>
       <label><Eye size={16}/><span>遮译自测</span><select aria-label="遮译语言" value={study} onChange={event => setStudy(event.target.value)}><option value="">关闭</option>{languages.map(lang => <option key={lang} value={lang}>遮住 {lang}</option>)}</select></label>
       <button onClick={() => { setShare(''); setScope(selectedCount ? 'selected' : 'visible'); setExportOpen(true) }}><Download size={16}/>导出台词</button>
+      <CopyButton label="复制当前结果" blocks={scenes.flatMap(scene => scene.lines.map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker })))} languages={languages} traveler={traveler}/>
+      {selectedCount > 0 && <CopyButton label={`复制已选台词（${selectedCount}）`} blocks={quest.scenes.flatMap(scene => scene.lines.filter(line => selected.has(line.key)).map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker })))} languages={languages} traveler={traveler}/>}
     </div>
     {exportOpen && <ReadingDialog title="导出台词" close={() => setExportOpen(false)}>
       <p>保留当前语言与旅行者称谓，可用于笔记或导入表格。</p>
@@ -141,7 +144,7 @@ export function ReaderTools({ data, quest, scenes, selected, languages, traveler
   </>
 }
 
-export function LineTools({ data, questId, line }: { data: ChapterData; questId: number; line: DialogueLine }) {
+export function LineTools({ data, questId, line, languages, traveler }: { data: ChapterData; questId: number; line: DialogueLine; languages: LanguageCode[]; traveler: Traveler }) {
   const { library, update, edit, report, study } = useReading()
   const [revealed, setRevealed] = useState(false)
   const [share, setShare] = useState('')
@@ -151,6 +154,7 @@ export function LineTools({ data, questId, line }: { data: ChapterData; questId:
   useEffect(() => { setRevealed(false); actionsRef.current?.closest('[data-line-key]')?.classList.remove('study-revealed') }, [study, line.key])
   return <>
     <div ref={actionsRef} className="line-reading-actions">
+      <CopyButton label="复制这句台词" blocks={[{ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker }]} languages={languages} traveler={traveler}/>
       <button aria-label={saved ? '取消收藏台词' : '收藏台词'} aria-pressed={Boolean(saved)} onClick={() => {
         if (saved?.note) { report('这条收藏含有笔记，请在阅读资料中编辑或移除'); return }
         update(current => ({ ...current, entries: saved ? current.entries.filter(item => item.id !== entry.id) : [entry, ...current.entries] }));

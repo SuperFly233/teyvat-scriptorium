@@ -1,7 +1,7 @@
 {
   "name": "teyvat-scriptorium",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -22,6 +22,7 @@
     "qa:branches": "node scripts/qa-branches.mjs",
     "qa:reader-layout": "node scripts/qa-reader-layout.mjs",
     "qa:reading-tools": "npm run build && node scripts/qa-reading-tools.mjs",
+    "qa:copy": "npm run build && node scripts/qa-copy.mjs",
     "publish:pages": "npm test && npm run build && wrangler pages deploy ./dist --project-name teyvat-scriptorium --branch main",
     "publish": "git push origin main && npm run publish:pages"
   },

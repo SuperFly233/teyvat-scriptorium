@@ -58,6 +58,7 @@ import { enrichBranches } from "./lib/branches";
 import { buildPrintMeta } from "./lib/printMeta";
 import { formatGameText, normalizeSearch } from "./lib/text";
 import { ReadingProvider, ReadingShelf, ReaderTools, LineTools, useStudyLanguage } from './components/ReadingTools';
+import { CopyProvider, CopyButton, CopySettings } from './components/CopyTools';
 import type {
   AppSettings,
   CatalogData,
@@ -211,7 +212,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.9.0";
+const APP_VERSION = "v0.10.0";
 const DialogueContext = createContext<{ data: ChapterData; questId: number } | null>(null);
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
@@ -1591,6 +1592,8 @@ function LanguagePicker({
           <span key={code}>
             <b>{index + 1}</b>
             {languageInfo(code).label}
+            <button aria-label={`阅读顺序上移${code}`} disabled={index === 0} onClick={() => { const next = [...value]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }}><ArrowUp size={13}/></button>
+            <button aria-label={`阅读顺序下移${code}`} disabled={index === value.length - 1} onClick={() => { const next = [...value]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; onChange(next); }}><ArrowDown size={13}/></button>
           </span>
         ))}
       </div>
@@ -2110,9 +2113,9 @@ function Reader({
           <span className="eyebrow">
             {localized(data.chapter.number, activeLanguages[0])} ·{" "}
             {localized(data.chapter.region, activeLanguages[0])}
-            <b>{localized(data.chapter.title, activeLanguages[0])}</b>
+            <b>{localized(data.chapter.title, activeLanguages[0])}<CopyButton label="复制章节标题" compact blocks={[{ text: data.chapter.title }]} languages={activeLanguages} traveler={traveler}/></b>
           </span>
-          <h1>{localized(activeQuest.title, activeLanguages[0])}</h1>
+          <h1>{localized(activeQuest.title, activeLanguages[0])}<CopyButton label="复制任务标题" compact blocks={[{ text: activeQuest.title }]} languages={activeLanguages} traveler={traveler}/></h1>
           {activeLanguages.slice(1).map((lang) => (
             <h2 key={lang}>{localized(activeQuest.title, lang)}</h2>
           ))}
@@ -2123,9 +2126,11 @@ function Reader({
               localized(activeQuest.description, lang) && (
                 <p lang={languageInfo(lang).locale} key={lang}>
                   {localized(activeQuest.description, lang)}
+                  <CopyButton label={`复制${lang}引入文本`} compact only={lang} blocks={[{ text: activeQuest.description }]} languages={activeLanguages} traveler={traveler}/>
                 </p>
               ),
           )}
+          {activeLanguages.some(lang => localized(activeQuest.description, lang)) && <CopyButton label="复制引入文本" blocks={[{ text: activeQuest.description }]} languages={activeLanguages} traveler={traveler}/>}
         </div>
       </section>
       <div className="reader-workspace">
@@ -2833,6 +2838,7 @@ function SceneBlock({
         <span>SCENE {String(sceneIndex + 1).padStart(2, "0")}</span>
         <div>
           <h3>{localized(scene.title, languages[0])}</h3>
+          <CopyButton label="复制场景标题" compact blocks={[{ text: scene.title }]} languages={languages} traveler={traveler}/>
           {languages.slice(1).map((lang) => (
             <p title={localized(scene.title, lang)} key={lang}>
               {localized(scene.title, lang)}
@@ -2841,6 +2847,7 @@ function SceneBlock({
         </div>
         <em>{scene.lines.length} 句</em>
       </header>
+      {languages.some(lang => localized(scene.description, lang)) && <CopyButton label="复制场景引入" blocks={[{ text: scene.description }]} languages={languages} traveler={traveler}/>}
       {tipVisible && (
         <aside className="scene-lead">
           <Info size={14} />
@@ -2982,13 +2989,14 @@ function DialogueRow({
                   query={highlightQuery}
                 />
               </p>
+              <CopyButton label={`复制${lang}台词`} compact only={lang} blocks={[{ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker }]} languages={languages} traveler={traveler}/>
             </div>
           ))}
         </div>
         {line.kind === "narration" && (
           <em className="choice-label">画面文字</em>
         )}
-        {reading && <LineTools data={reading.data} questId={reading.questId} line={line}/>}
+        {reading && <LineTools data={reading.data} questId={reading.questId} line={line} languages={languages} traveler={traveler}/>}
       </div>
     </article>
   );
@@ -3212,6 +3220,9 @@ function SettingsSheet({
             onChange={(v) => onChange({ ...value, viewMode: v as ViewMode })}
             options={VIEW_OPTIONS.map((x) => [x.id, x.label])}
           />
+        </SettingRow>
+        <SettingRow title="复制与粘贴">
+          <CopySettings languages={value.languages || ['CHS','EN']} blocks={chapter?.quests[0]?.scenes[0]?.lines.slice(0, 2).map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker }))}/>
         </SettingRow>
         <SettingRow title="字体">
           <Segment
@@ -4713,6 +4724,16 @@ function Modal({
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
             <article>
+              <span>v0.10.0 · 2026-10-23</span>
+              <h3>逐句复制与自定义格式</h3>
+              <ul>
+                <li>台词可整句对照复制或单语复制；章节标题、任务标题、引入、场景文本与已选台词均有快捷复制入口。</li>
+                <li>阅读语言支持上下调整；复制可跟随阅读，或独立选择语言和排列顺序。</li>
+                <li>支持角色名开关、冒号、空格、换行、空一行及自定义分隔符，提供实时预览和自动保存。</li>
+                <li>支持逐句对照或按语言分组、语言代码和段内换行控制；权限受限时提供已选中的手动复制文本。</li>
+              </ul>
+            </article>
+            <article>
               <span>v0.9.0 · 2026-10-13</span>
               <h3>阅读资料与语言练习</h3>
               <ul>
@@ -5035,7 +5056,7 @@ function Changelog({ onClose }: { onClose: () => void }) {
 }
 
 export default function App() {
-  return <ReadingProvider><AppContent/></ReadingProvider>;
+  return <CopyProvider><ReadingProvider><AppContent/></ReadingProvider></CopyProvider>;
 }
 function AppContent() {
   const [settings, setSettings] = useStoredState<AppSettings>(

@@ -1,0 +1,86 @@
+import { chromium } from 'playwright'
+import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { extname, join } from 'node:path'
+
+await mkdir('artifacts', { recursive: true })
+const data = await readFile('public/data/quest-1700.json')
+const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript', '.css':'text/css', '.json':'application/json', '.woff2':'font/woff2', '.svg':'image/svg+xml' }
+const server = createServer(async (request, response) => {
+  try {
+    const path = new URL(request.url, 'http://local').pathname
+    if (path.startsWith('/api/quest/1700')) { response.writeHead(200, {'content-type':'application/json'}); response.end(data); return }
+    if (path.startsWith('/api/')) { response.writeHead(503).end(); return }
+    const file = join(process.cwd(), 'dist', path === '/' ? 'index.html' : path.slice(1))
+    response.writeHead(200, {'content-type':types[extname(file)] || 'application/octet-stream'}); response.end(await readFile(file))
+  } catch { response.writeHead(404).end() }
+})
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+const browser = await chromium.launch({ headless:true })
+const context = await browser.newContext({ viewport:{width:1440,height:900}, permissions:['clipboard-read','clipboard-write'] })
+const page = await context.newPage(); const errors = []; page.on('pageerror', error => errors.push(error.message))
+await page.addInitScript(() => { if (!localStorage.getItem('teyvat:settings:v5')) localStorage.setItem('teyvat:settings:v5', JSON.stringify({languages:['CHS','EN'],guideReader:false,guideScenes:false,guideCatalog:false})); localStorage.setItem('teyvat:reader-guide:v1','done') })
+const clipboard = async () => (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g,'\n')
+const row = () => page.locator('.dialogue-row').first()
+const copyOptions = () => page.getByRole('dialog',{name:'复制选项',exact:true})
+const close = async () => page.getByRole('button',{name:'关闭复制面板',exact:true}).last().click()
+const noOverflow = () => page.evaluate(() => document.scrollingElement.scrollWidth <= document.scrollingElement.clientWidth)
+try {
+  await page.goto(`http://127.0.0.1:${server.address().port}/?chapter=1700`,{waitUntil:'networkidle'})
+  await row().waitFor(); await page.locator('.loading-overlay').waitFor({state:'hidden'})
+  const zh = await row().locator('[data-language=CHS] p').innerText(); const en = await row().locator('[data-language=EN] p').innerText()
+  const zhName = await row().locator('[data-language=CHS] strong').textContent(); const enName = await row().locator('[data-language=EN] strong').textContent()
+  await row().getByRole('button',{name:'复制这句台词',exact:true}).click(); assert.equal(await clipboard(),`${zhName}：${zh}\n${enName}：${en}`)
+  await row().getByRole('button',{name:'复制EN台词',exact:true}).click(); assert.equal(await clipboard(),`${enName}：${en}`)
+  await row().getByRole('button',{name:'复制这句台词的格式选项',exact:true}).click()
+  await copyOptions().getByRole('button',{name:'中文在后',exact:true}).click()
+  assert.ok((await copyOptions().getByLabel('复制预览').inputValue()).startsWith(enName))
+  await copyOptions().getByRole('button',{name:'中文在前',exact:true}).click()
+  await copyOptions().getByLabel('语言和顺序跟随阅读').uncheck()
+  await copyOptions().getByRole('button',{name:'复制顺序上移EN',exact:true}).click()
+  await copyOptions().getByLabel('名字与正文之间',{exact:true}).selectOption('\n\n')
+  await copyOptions().getByLabel('语言之间',{exact:true}).selectOption('__custom')
+  await copyOptions().getByLabel('自定义语言之间',{exact:true}).fill(' | ')
+  let preview = await copyOptions().getByLabel('复制预览').inputValue()
+  assert.equal(preview,`${enName}\n\n${en} | ${zhName}\n\n${zh}`)
+  await copyOptions().getByRole('button',{name:'复制预览内容'}).click(); assert.equal(await clipboard(),preview)
+  await copyOptions().getByLabel('包含角色名字').uncheck()
+  await copyOptions().getByRole('checkbox',{name:'简体中文',exact:true}).uncheck()
+  preview = await copyOptions().getByLabel('复制预览').inputValue(); assert.equal(preview,en)
+  await close(); await page.reload({waitUntil:'networkidle'}); await row().waitFor()
+  await row().getByRole('button',{name:'复制这句台词',exact:true}).click(); assert.equal(await clipboard(),en)
+  await page.getByRole('button',{name:'复制任务标题',exact:true}).click(); assert.equal(await clipboard(),await page.locator('.reader-intro h2').first().innerText())
+  await page.getByRole('button',{name:'复制CHS引入文本',exact:true}).click(); assert.ok((await clipboard()).length > 5); assert.notEqual(await clipboard(),en)
+  await page.locator('.scene-block').first().getByRole('button',{name:'复制场景标题',exact:true}).click(); assert.ok((await clipboard()).length)
+  await row().getByRole('button',{name:'复制这句台词的格式选项',exact:true}).click(); await copyOptions().getByRole('button',{name:'恢复默认格式'}).click(); await close()
+  await page.locator('.language-control > button').click(); await page.getByRole('button',{name:'阅读顺序上移EN',exact:true}).click(); await page.locator('.loading-overlay').waitFor({state:'hidden'})
+  await page.locator('.language-control > button').click()
+  assert.equal(await row().locator('.utterance').first().getAttribute('data-language'),'EN')
+  await row().getByRole('button',{name:'复制这句台词',exact:true}).click(); assert.equal(await clipboard(),`${enName}：${en}\n${zhName}：${zh}`)
+  await page.locator('.selection-toggle').click(); await row().locator('.line-select').click()
+  await page.getByRole('button',{name:'复制已选台词（1）',exact:true}).click(); assert.equal(await row().getAttribute('aria-checked'),'true'); assert.equal(await clipboard(),`${enName}：${en}\n${zhName}：${zh}`)
+  await row().getByRole('button',{name:'复制这句台词的格式选项',exact:true}).focus(); await page.keyboard.press('Enter'); assert.equal(await row().getAttribute('aria-checked'),'true')
+  const desktopDialog = await copyOptions().boundingBox(); assert.ok(desktopDialog.x >= 0 && desktopDialog.x + desktopDialog.width <= 1440)
+  await page.screenshot({path:'artifacts/copy-options-desktop.png'})
+  await page.setViewportSize({width:390,height:844}); await page.waitForTimeout(500)
+  const mobileDialog = await copyOptions().boundingBox(); assert.ok(mobileDialog.x >= 0 && mobileDialog.x + mobileDialog.width <= 390)
+  const copyAction = await copyOptions().getByRole('button',{name:'复制预览内容'}).boundingBox(); assert.ok(copyAction.y >= 0 && copyAction.y + copyAction.height <= 844)
+  assert.ok(await noOverflow()); await page.screenshot({path:'artifacts/copy-options-mobile.png'})
+  await page.keyboard.press('Escape'); await page.locator('.selection-toggle').click(); await row().scrollIntoViewIfNeeded(); await page.evaluate(()=>scrollBy(0,-150)); await page.waitForTimeout(350)
+  await page.screenshot({path:'artifacts/copy-reader-mobile.png'}); assert.ok(await noOverflow())
+  await page.evaluate(()=>document.documentElement.dataset.theme='dark'); await page.screenshot({path:'artifacts/copy-reader-dark.png'})
+  await page.setViewportSize({width:1440,height:900}); await page.waitForTimeout(500); await page.screenshot({path:'artifacts/copy-reader-desktop.png'})
+  // Explicit clipboard denial offers selectable text instead of a false success.
+  await page.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{configurable:true,value:()=>Promise.reject(new DOMException('Denied','NotAllowedError'))}))
+  await row().getByRole('button',{name:'复制EN台词',exact:true}).click()
+  const manual = page.getByRole('dialog',{name:'手动复制'}); await manual.waitFor(); assert.equal(await manual.getByLabel('待复制文本').inputValue(),`${enName}：${en}`)
+  assert.equal(await manual.getByLabel('待复制文本').evaluate(element=>element.selectionEnd-element.selectionStart),`${enName}：${en}`.length)
+  await page.keyboard.press('Escape')
+  await page.getByRole('button',{name:'设置',exact:true}).click(); await page.locator('.settings-list .copy-settings').waitFor()
+  await page.locator('.settings-list .copy-settings').getByLabel('包含角色名字').uncheck()
+  await page.emulateMedia({media:'print'}); assert.equal(await row().locator('.copy-control').first().evaluate(element=>getComputedStyle(element).display),'none'); await page.emulateMedia({media:'screen'})
+  assert.deepEqual(errors,[])
+  const result={clipboard:'exact text verified',customOrder:true,singleLanguage:true,namesAndSeparators:true,persistence:true,readingOrder:true,selectedCopy:true,titleAndIntro:true,manualFallback:true,printControlsHidden:true,desktopDialog,mobileDialog,pageErrors:errors}
+  await writeFile('artifacts/copy-qa-results.json',JSON.stringify(result,null,2)); console.log(JSON.stringify(result))
+} finally { await browser.close(); server.close() }
