@@ -66,6 +66,7 @@ try {
   await page.setViewportSize({width:390,height:844}); await page.waitForTimeout(500)
   const mobileDialog = await copyOptions().boundingBox(); assert.ok(mobileDialog.x >= 0 && mobileDialog.x + mobileDialog.width <= 390)
   const copyAction = await copyOptions().getByRole('button',{name:'复制预览内容'}).boundingBox(); assert.ok(copyAction.y >= 0 && copyAction.y + copyAction.height <= 844)
+  const closeAction = await copyOptions().getByRole('button',{name:'关闭复制面板'}).boundingBox(); assert.ok(closeAction.y >= 0 && closeAction.y + closeAction.height <= 844)
   assert.ok(await noOverflow()); await page.screenshot({path:'artifacts/copy-options-mobile.png'})
   await page.keyboard.press('Escape'); await page.locator('.selection-toggle').click(); await row().scrollIntoViewIfNeeded(); await page.evaluate(()=>scrollBy(0,-150)); await page.waitForTimeout(350)
   await page.screenshot({path:'artifacts/copy-reader-mobile.png'}); assert.ok(await noOverflow())

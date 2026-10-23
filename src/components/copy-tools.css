@@ -19,6 +19,7 @@
 .copy-dialog { width: min(660px, calc(100vw - 24px)); max-height: 88dvh; overflow: auto; box-sizing: border-box; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); color: var(--ink); box-shadow: var(--shadow); }
 .copy-dialog::backdrop { background: rgb(12 22 20 / 55%); }
 .copy-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.copy-dialog > header { position: sticky; top: 0; z-index: 3; padding-block: 8px; background: var(--paper-2); }
 .copy-dialog h2 { margin: 0; font-size: 22px; }
 .copy-dialog button, .copy-settings button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 9px; color: var(--ink); border: 1px solid var(--line); background: var(--paper); border-radius: 5px; font: inherit; font-size: 13px; cursor: pointer; }
 .copy-settings button:disabled { opacity: .3; cursor: default; }
