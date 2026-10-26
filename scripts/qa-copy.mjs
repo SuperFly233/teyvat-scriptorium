@@ -21,7 +21,7 @@ const browser = await chromium.launch({ headless:true })
 const context = await browser.newContext({ viewport:{width:1440,height:900}, permissions:['clipboard-read','clipboard-write'] })
 const page = await context.newPage(); const errors = []; page.on('pageerror', error => errors.push(error.message))
 await page.addInitScript(() => { if (!localStorage.getItem('teyvat:settings:v5')) localStorage.setItem('teyvat:settings:v5', JSON.stringify({languages:['CHS','EN'],guideReader:false,guideScenes:false,guideCatalog:false})); localStorage.setItem('teyvat:reader-guide:v1','done') })
-const clipboard = async () => (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g,'\n')
+const clipboard = async () => { await page.waitForFunction(()=>!document.querySelector('button[aria-busy="true"]')); return (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g,'\n') }
 const row = () => page.locator('.dialogue-row').first()
 const copyOptions = () => page.getByRole('dialog',{name:'复制选项',exact:true})
 const close = async () => page.getByRole('button',{name:'关闭复制面板',exact:true}).last().click()
@@ -123,7 +123,7 @@ try {
   await page.evaluate(()=>document.documentElement.dataset.theme='dark'); await page.screenshot({path:'artifacts/copy-reader-dark.png'})
   await page.setViewportSize({width:1440,height:900}); await page.waitForTimeout(500); await page.screenshot({path:'artifacts/copy-reader-desktop.png'})
   // Explicit clipboard denial offers selectable text instead of a false success.
-  await page.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{configurable:true,value:()=>Promise.reject(new DOMException('Denied','NotAllowedError'))}))
+  await page.evaluate(()=>{Object.defineProperty(navigator.clipboard,'writeText',{configurable:true,value:()=>Promise.reject(new DOMException('Denied','NotAllowedError'))});Object.defineProperty(navigator.clipboard,'write',{configurable:true,value:()=>Promise.reject(new DOMException('Denied','NotAllowedError'))})})
   await row().getByRole('button',{name:'复制EN台词',exact:true}).click()
   const manual = page.getByRole('dialog',{name:'手动复制'}); await manual.waitFor(); assert.equal(await manual.getByLabel('待复制文本').inputValue(),`${enName}: ${en}`)
   assert.equal(await manual.getByLabel('待复制文本').evaluate(element=>element.selectionEnd-element.selectionStart),`${enName}: ${en}`.length)

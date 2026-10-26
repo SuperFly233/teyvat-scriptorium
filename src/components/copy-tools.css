@@ -44,6 +44,9 @@
 .copy-language-styles legend { padding-inline: 5px; font-size: 13px; }
 .copy-language-styles .copy-settings-grid { margin: 0; }
 .copy-help { color: var(--muted); font-size: 12px; }
+.copy-rich-preview { max-height: 280px; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
+.copy-rich-preview p { margin: 0; white-space: pre-wrap; }
+.copy-rich-preview strong { display: inline; font-size: inherit; color: inherit; font-weight: 700; }
 .copy-dialog-footer { position: sticky; bottom: -24px; z-index: 2; margin-top: 12px; padding: 12px 0; background: var(--paper-2); }
 .copy-dialog-footer > p { margin: 4px 0 0; font-size: 12px; }
 .copy-dialog .copy-confirm { display: flex; margin: 18px 0 0 auto; background: var(--green); color: white; padding: 10px 16px; }

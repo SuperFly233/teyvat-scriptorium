@@ -59,6 +59,7 @@ import { buildPrintMeta } from "./lib/printMeta";
 import { formatGameText, normalizeSearch } from "./lib/text";
 import { ReadingProvider, ReadingShelf, ReaderTools, LineTools, useStudyLanguage } from './components/ReadingTools';
 import { CopyProvider, CopyButton, CopySettings } from './components/CopyTools';
+import { copyBlocksForScenes } from './lib/copy';
 import type {
   AppSettings,
   CatalogData,
@@ -212,7 +213,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.10.2";
+const APP_VERSION = "v0.11.0";
 const DialogueContext = createContext<{ data: ChapterData; questId: number } | null>(null);
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
@@ -1808,7 +1809,7 @@ function Reader({
     );
   }, [matchIndex, matchKeys, deferredQuery, searchMode]);
   const visibleLineKeys = scenes.flatMap((s) => s.lines.map((l) => l.key));
-  const selectedCopyBlocks = useMemo(() => activeQuest.scenes.flatMap(scene => scene.lines.filter(line => selectedLines.has(line.key)).map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker }))), [activeQuest, selectedLines]);
+  const selectedCopyBlocks = useMemo(() => copyBlocksForScenes(activeQuest.scenes,selectedLines), [activeQuest, selectedLines]);
   const selectedVisible = visibleLineKeys.filter((key) =>
     selectedLines.has(key),
   ).length;
@@ -3224,7 +3225,7 @@ function SettingsSheet({
           />
         </SettingRow>
         <SettingRow title="复制与粘贴">
-          <CopySettings languages={value.languages || ['CHS','EN']} blocks={chapter?.quests[0]?.scenes.flatMap(scene => scene.lines).slice(0, 2).map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker }))}/>
+          <CopySettings languages={value.languages || ['CHS','EN']} blocks={chapter?.quests[0] ? copyBlocksForScenes(chapter.quests[0].scenes).slice(0,3) : undefined}/>
         </SettingRow>
         <SettingRow title="字体">
           <Segment
@@ -4725,6 +4726,16 @@ function Modal({
         </header>
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
+            <article>
+              <span>v0.11.0 · 2026-10-26</span>
+              <h3>Word 分语言稿</h3>
+              <ul>
+                <li>新增预设：语言各自成稿，段内换行、语言间分隔线，名字加粗并带冒号独占一行。</li>
+                <li>连续同一人只在开头署名；旁白、场景、分支及选句缺口会重新计算署名。</li>
+                <li>段落与语言分隔独立设置，支持空行、分隔线和自定义；名字位置、冒号及加粗可分别调整。</li>
+                <li>同时复制富文本与纯文本，粘贴可保留名字加粗；提供富文本预览、纯文本模式及兼容回退。</li>
+              </ul>
+            </article>
             <article>
               <span>v0.10.2 · 2026-10-24</span>
               <h3>多选与多段复制</h3>

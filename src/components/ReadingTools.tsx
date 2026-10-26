@@ -3,6 +3,7 @@ import { Bookmark, BookOpen, Download, Eye, FileText, Share2, X } from 'lucide-r
 import type { ChapterData, DialogueLine, LanguageCode, Quest, Scene, Traveler } from '../types'
 import { EMPTY_LIBRARY, LIBRARY_KEY, downloadText, exportDialogue, makeEntry, mergeLibrary, parseLibrary, readingLink, type ReadingEntry, type ReadingLibrary } from '../lib/reading'
 import { CopyButton } from './CopyTools'
+import { copyBlocksForScenes } from '../lib/copy'
 
 const ReadingContext = createContext<{
   library: ReadingLibrary; update: (fn: (value: ReadingLibrary) => ReadingLibrary) => void;
@@ -129,8 +130,8 @@ export function ReaderTools({ data, quest, scenes, selected, languages, traveler
       <button onClick={open}><Bookmark size={16}/>阅读资料{library.entries.length ? ` · ${library.entries.length}` : ''}</button>
       <label><Eye size={16}/><span>遮译自测</span><select aria-label="遮译语言" value={study} onChange={event => setStudy(event.target.value)}><option value="">关闭</option>{languages.map(lang => <option key={lang} value={lang}>遮住 {lang}</option>)}</select></label>
       <button onClick={() => { setShare(''); setScope(selectedCount ? 'selected' : 'visible'); setExportOpen(true) }}><Download size={16}/>导出台词</button>
-      <CopyButton label="复制当前结果" blocks={scenes.flatMap(scene => scene.lines.map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker })))} languages={languages} traveler={traveler}/>
-      {selectedCount > 0 && <CopyButton label={`复制已选台词（${selectedCount}）`} blocks={quest.scenes.flatMap(scene => scene.lines.filter(line => selected.has(line.key)).map(line => ({ text: line.text, speaker: line.kind === 'narration' ? undefined : line.speaker })))} languages={languages} traveler={traveler}/>}
+      <CopyButton label="复制当前结果" blocks={copyBlocksForScenes(quest.scenes,new Set(scenes.flatMap(scene=>scene.lines.map(line=>line.key))))} languages={languages} traveler={traveler}/>
+      {selectedCount > 0 && <CopyButton label={`复制已选台词（${selectedCount}）`} blocks={copyBlocksForScenes(quest.scenes,selected)} languages={languages} traveler={traveler}/>}
     </div>
     {exportOpen && <ReadingDialog title="导出台词" close={() => setExportOpen(false)}>
       <p>保留当前语言与旅行者称谓，可用于笔记或导入表格。</p>
