@@ -1,11 +1,13 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, ChevronDown, Copy, X } from 'lucide-react'
+import { dottedCopyDate, formatCopySource, localCopyDate, type CopySource } from '../lib/copySource'
 import type { LanguageCode, Traveler } from '../types'
 import { COPY_KEY, COPY_NAMES, DEFAULT_COPY, LANGUAGE_SPEAKER_SEPARATORS, formatCopyPayload, normalizeCopy, wordCopyPreset, type CopyBlock, type CopyPayload, type CopyPreferences, type LanguageCopyStyle } from '../lib/copy'
 
-const CopyContext = createContext<{ prefs: CopyPreferences; setPrefs: (prefs: CopyPreferences) => void; copy: (payload: CopyPayload) => void; message: string; copying: boolean } | null>(null)
+const CopyContext = createContext<{ prefs: CopyPreferences; setPrefs: (prefs: CopyPreferences) => void; copy: (payload: CopyPayload) => void; message: string; copying: boolean; source?: CopySource; setSource: (source?: CopySource) => void } | null>(null)
 export function CopyProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefs] = useState(() => { try { return normalizeCopy(JSON.parse(localStorage.getItem(COPY_KEY) || 'null')) } catch { return normalizeCopy(null) } })
+  const [source, setSource] = useState<CopySource>()
   const [message, setMessage] = useState('')
   const [copying, setCopying] = useState(false)
   const [manual, setManual] = useState<string | null>(null)
@@ -25,10 +27,14 @@ export function CopyProvider({ children }: { children: ReactNode }) {
         .then(() => { setMessage('已复制（含格式）'); setManual(null); setCopying(false) }, () => plain(true));
     } catch { plain(true) }
   }
-  return <CopyContext.Provider value={{ prefs, setPrefs, copy, message, copying }}>{children}
+  return <CopyContext.Provider value={{ prefs, setPrefs, copy, message, copying, source, setSource }}>{children}
     {message && <div className="copy-notice" role="status">{message}</div>}
     {manual !== null && <CopyDialog title="手动复制" close={() => setManual(null)}><p>文本已选中，按 Ctrl/Cmd+C 或长按复制。</p><textarea data-auto-select aria-label="待复制文本" readOnly autoFocus value={manual} onFocus={event => event.target.select()}/></CopyDialog>}
   </CopyContext.Provider>
+}
+export function useCopySource(source: CopySource) {
+  const {setSource} = useContext(CopyContext)!
+  useEffect(() => { setSource(source); return () => setSource(undefined) }, [source,setSource])
 }
 function CopyDialog({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -48,8 +54,8 @@ function Separator({ label, value, change, speaker = false, inherit }: { label: 
     {custom && <input aria-label={`自定义${label}`} maxLength={80} placeholder="例如 ｜ 或 \n" value={displaySeparator(value)} onChange={event => change(decodeSeparator(event.target.value))}/>}
   </label>
 }
-export function CopySettings({ languages, blocks, traveler = 'aether' }: { languages: LanguageCode[]; blocks?: CopyBlock[]; traveler?: Traveler }) {
-  const { prefs, setPrefs } = useContext(CopyContext)!
+export function CopySettings({ languages, blocks, traveler = 'aether', withHeader = true }: { languages: LanguageCode[]; blocks?: CopyBlock[]; traveler?: Traveler; withHeader?: boolean }) {
+  const { prefs, setPrefs, source } = useContext(CopyContext)!
   const [resetVersion, setResetVersion] = useState(0)
   const change = (next: Partial<CopyPreferences>) => setPrefs({ ...prefs, ...next })
   const changeLanguage = (language: LanguageCode, next: Partial<LanguageCopyStyle>) => {
@@ -68,7 +74,7 @@ export function CopySettings({ languages, blocks, traveler = 'aether' }: { langu
     change({ languages: [...next, ...prefs.languages.filter(lang => !languages.includes(lang))] })
   }
   const example: CopyBlock[] = blocks || [{ speaker: { zh: '派蒙', en: 'Paimon', translations: { JP: 'パイモン' } }, text: { zh: '你好，旅行者。', en: 'Hello, Traveler.', translations: { JP: 'こんにちは、旅人。' } } }, {speaker:{zh:'旅行者',en:'Traveler',translations:{JP:'旅人'}},text:{zh:'我们出发吧。',en:"Let's go.",translations:{JP:'出発しよう。'}}}]
-  const preview = formatCopyPayload(example,languages,prefs,traveler);
+  const preview = formatCopyPayload(example,languages,prefs,traveler,undefined,{source,allowHeader:withHeader});
   return <section className="copy-settings" aria-label="复制格式设置">
     <div className="copy-order-shortcuts"><span>预设</span><button onClick={() => { setPrefs(wordCopyPreset(prefs)); setResetVersion(value => value + 1) }}>Word 分语言稿</button></div>
     <label className="copy-check"><input type="checkbox" checked={prefs.followReader} onChange={event => change({ followReader: event.target.checked })}/>语言和顺序跟随阅读</label>
@@ -88,6 +94,17 @@ export function CopySettings({ languages, blocks, traveler = 'aether' }: { langu
       {prefs.speakerLayout === 'heading' && prefs.headingColon && <small>冒号按语言适配，行尾不加空格。</small>}
       <Separator key={`language-${resetVersion}`} label="语言分隔" value={prefs.languageSeparator} change={languageSeparator => change({ languageSeparator })}/>
     </div>
+    {withHeader && <details className="copy-more copy-headers"><summary>日期与来源</summary>
+      <div className="copy-settings-grid">
+        <label className="copy-check"><input type="checkbox" checked={prefs.includeDate} onChange={event=>change({includeDate:event.target.checked})}/>添加日期</label>
+        {prefs.includeDate && <label className="copy-field">日期<select aria-label="日期" value={prefs.dateMode} onChange={event=>change({dateMode:event.target.value as CopyPreferences['dateMode'],customDate:prefs.customDate || localCopyDate()})}><option value="today">当天（{dottedCopyDate(localCopyDate())}）</option><option value="custom">指定日期</option></select>{prefs.dateMode==='custom' && <input type="date" aria-label="指定日期" min="1000-01-01" max="9999-12-31" value={prefs.customDate} onChange={event=>change({customDate:event.target.value})}/>}</label>}
+        <label className="copy-check"><input type="checkbox" checked={prefs.includeSource} onChange={event=>change({includeSource:event.target.checked})}/>添加来源</label>
+        {prefs.includeSource && <label className="copy-field">来源格式<select aria-label="来源格式" value={prefs.sourceMode} onChange={event=>change({sourceMode:event.target.value as CopyPreferences['sourceMode']})}><option value="full">完整：游戏、版本、地区、任务与章节</option><option value="short">简短：幕次、章节与任务</option><option value="custom">自定义</option></select></label>}
+      </div>
+      {prefs.includeSource && (prefs.sourceMode==='custom' ? <label className="copy-field">自定义来源<textarea aria-label="自定义来源" maxLength={2000} value={prefs.customSource} onChange={event=>change({customSource:event.target.value})}/><small>固定文本，不随任务切换。</small></label> : <div className="copy-field"><span>{formatCopySource(source,prefs.sourceMode) || '打开任务后自动填入来源。'}</span><small>随当前任务更新；缺少的版本等信息自动省略。</small><button onClick={()=>change({sourceMode:'custom',customSource:formatCopySource(source,prefs.sourceMode)})}>编辑来源</button></div>)}
+      <div className="copy-settings-grid"><label className="copy-check"><input type="checkbox" checked={prefs.boldHeader} onChange={event=>change({boldHeader:event.target.checked})}/>题头加粗</label><Separator key={`header-${resetVersion}`} label="题头与正文分隔" value={prefs.headerSeparator} change={headerSeparator=>change({headerSeparator})}/></div>
+      <p className="copy-help">题头只在整份稿件开头添加一次。当天日期以复制时为准。</p>
+    </details>}
     <details className="copy-more copy-language-styles"><summary>按语言单独设置</summary>
       <p className="copy-help">单独设置优先；未设置时沿用上方选项。</p>
       {languages.map(language => { const style = prefs.languageStyles[language]; const separator = prefs.speakerMode === 'auto' ? LANGUAGE_SPEAKER_SEPARATORS[language] : prefs.speakerSeparator; return <fieldset key={language}>
@@ -111,22 +128,22 @@ export function CopySettings({ languages, blocks, traveler = 'aether' }: { langu
       <label className="copy-check"><input type="checkbox" checked={prefs.preserveBreaks} onChange={event => change({ preserveBreaks: event.target.checked })}/>保留正文内换行</label>
       <label className="copy-field">复制格式<select aria-label="复制格式" value={prefs.copyFormat} onChange={event=>change({copyFormat:event.target.value as CopyPreferences['copyFormat']})}><option value="rich">富文本＋纯文本</option><option value="plain">仅纯文本</option></select></label>
     </div></details>
-    {prefs.copyFormat === 'rich' && (prefs.boldSpeaker || prefs.speakerLayout === 'heading') && <div className="copy-field">粘贴预览<div className="copy-rich-preview" role="region" aria-label="富文本预览" dangerouslySetInnerHTML={{__html:preview.html}}/><small>粘贴到 Word 时选择“保留源格式”。</small></div>}
+    {prefs.copyFormat === 'rich' && (prefs.boldSpeaker || prefs.boldHeader || prefs.speakerLayout === 'heading') && <div className="copy-field">粘贴预览<div className="copy-rich-preview" role="region" aria-label="富文本预览" dangerouslySetInnerHTML={{__html:preview.html}}/><small>粘贴到 Word 时选择“保留源格式”。</small></div>}
     <label className="copy-field">纯文本预览<textarea aria-label="复制预览" readOnly value={preview.text} onFocus={event => event.target.select()}/></label>
     <div className="copy-settings-footer"><small>自动保存 · 仅复制已载入语言</small><button onClick={() => { setPrefs(normalizeCopy(DEFAULT_COPY)); setResetVersion(value => value + 1) }}>恢复默认格式</button></div>
   </section>
 }
-export function CopyButton({ blocks, languages, traveler = 'aether', label = '复制', only, compact = false, options = true, disabled = false }: {
-  blocks: CopyBlock[]; languages: LanguageCode[]; traveler?: Traveler; label?: string; only?: LanguageCode; compact?: boolean; options?: boolean; disabled?: boolean;
+export function CopyButton({ blocks, languages, traveler = 'aether', label = '复制', only, compact = false, options = true, disabled = false, withHeader = true }: {
+  blocks: CopyBlock[]; languages: LanguageCode[]; traveler?: Traveler; label?: string; only?: LanguageCode; compact?: boolean; options?: boolean; disabled?: boolean; withHeader?: boolean;
 }) {
-  const { prefs, copy, message, copying } = useContext(CopyContext)!
+  const { prefs, copy, message, copying, source } = useContext(CopyContext)!
   const [open, setOpen] = useState(false)
   return <span className={`copy-control ${compact ? 'copy-compact' : ''}`}>
-    <button type="button" disabled={disabled || copying} aria-busy={copying} aria-label={label} title={label} onClick={() => copy(formatCopyPayload(blocks, languages, prefs, traveler, only))}><Copy size={14}/>{!compact && <span>{label}</span>}</button>
+    <button type="button" disabled={disabled || copying} aria-busy={copying} aria-label={label} title={label} onClick={() => copy(formatCopyPayload(blocks, languages, prefs, traveler, only,{source,allowHeader:withHeader}))}><Copy size={14}/>{!compact && <span>{label}</span>}</button>
     {options && !only && <button type="button" disabled={disabled} className="copy-options-button" aria-label={`${label}的格式选项`} title="复制格式选项" onClick={() => setOpen(true)}><ChevronDown size={13}/></button>}
     {open && <CopyDialog title="复制选项" close={() => setOpen(false)}>
-      <CopySettings languages={languages} blocks={blocks} traveler={traveler}/>
-      <div className="copy-dialog-footer"><button className="copy-confirm" disabled={copying} aria-busy={copying} onClick={() => copy(formatCopyPayload(blocks, languages, prefs, traveler))}><Copy size={16}/>{copying ? '正在复制…' : '复制预览内容'}</button>
+      <CopySettings languages={languages} blocks={blocks} traveler={traveler} withHeader={withHeader}/>
+      <div className="copy-dialog-footer"><button className="copy-confirm" disabled={copying} aria-busy={copying} onClick={() => copy(formatCopyPayload(blocks, languages, prefs, traveler, undefined,{source,allowHeader:withHeader}))}><Copy size={16}/>{copying ? '正在复制…' : '复制预览内容'}</button>
       {message && <p role="status">{message}</p>}</div>
     </CopyDialog>}
   </span>

@@ -1,9 +1,11 @@
 import type { LanguageCode, LanguagePair, Scene, Traveler } from '../types'
 import { localText } from './reading'
 import { formatGameText } from './text'
+import { dottedCopyDate, formatCopySource, localCopyDate, validCopyDate, type CopySource } from './copySource'
 
 export type CopyBlock = { text: LanguagePair; speaker?: LanguagePair; continuityKey?: string; ordinal?: number }
 export type CopyPayload = { text: string; html: string }
+export type CopyDocumentContext = {source?:CopySource;now?:Date;allowHeader?:boolean}
 export type LanguageCopyStyle = { includeSpeaker?: boolean; separator?: string }
 export type CopyPreferences = {
   followReader: boolean; languages: LanguageCode[]; includeSpeaker: boolean;
@@ -12,17 +14,20 @@ export type CopyPreferences = {
   speakerMode: 'auto' | 'uniform'; languageStyles: Partial<Record<LanguageCode, LanguageCopyStyle>>;
   repeatSpeaker: 'always' | 'changes'; speakerLayout: 'inline' | 'heading';
   boldSpeaker: boolean; headingColon: boolean; copyFormat: 'rich' | 'plain';
+  includeDate:boolean;dateMode:'today'|'custom';customDate:string;
+  includeSource:boolean;sourceMode:'full'|'short'|'custom';customSource:string;boldHeader:boolean;headerSeparator:string;
 }
 export const COPY_KEY = 'teyvat:copy:v1'
 export const COPY_LANGUAGES: LanguageCode[] = ['CHS','CHT','EN','JP','KR','DE','ES','FR','ID','PT','RU','TH','VI','IT','TR']
 export const COPY_NAMES: Record<LanguageCode, string> = { CHS:'简体中文', CHT:'繁體中文', EN:'English', JP:'日本語', KR:'한국어', DE:'Deutsch', ES:'Español', FR:'Français', ID:'Bahasa Indonesia', PT:'Português', RU:'Русский', TH:'ไทย', VI:'Tiếng Việt', IT:'Italiano', TR:'Türkçe' }
 export const DEFAULT_COPY: CopyPreferences = { followReader: true, languages: ['CHS','EN'], includeSpeaker: true,
   speakerSeparator: '：', languageSeparator: '\n', sentenceSeparator: '\n\n', languageLabels: false, grouping: 'sentence', preserveBreaks: true,
-  speakerMode: 'auto', languageStyles: {}, repeatSpeaker:'always', speakerLayout:'inline', boldSpeaker:false, headingColon:true, copyFormat:'rich' }
+  speakerMode: 'auto', languageStyles: {}, repeatSpeaker:'always', speakerLayout:'inline', boldSpeaker:false, headingColon:true, copyFormat:'rich',
+  includeDate:false,dateMode:'today',customDate:'',includeSource:false,sourceMode:'full',customSource:'',boldHeader:true,headerSeparator:'\n' }
 export function wordCopyPreset(prefs: CopyPreferences): CopyPreferences {
   return { ...prefs, includeSpeaker:true, speakerMode:'auto', languageStyles:{}, grouping:'language',
     sentenceSeparator:'\n', languageSeparator:'\n——\n', repeatSpeaker:'changes', speakerLayout:'heading', boldSpeaker:true, headingColon:true,
-    copyFormat:'rich', languageLabels:false, preserveBreaks:true };
+    copyFormat:'rich', languageLabels:false, preserveBreaks:true,includeDate:true,includeSource:true,boldHeader:true };
 }
 export function copyBlocksForScenes(scenes: Scene[], selected?: Set<string>): CopyBlock[] {
   return scenes.flatMap(scene => scene.lines.flatMap((line, ordinal) => !selected || selected.has(line.key) ? [{
@@ -43,11 +48,15 @@ export function speakerStyle(prefs: CopyPreferences, language: LanguageCode) {
 export function normalizeCopy(value: unknown): CopyPreferences {
   const prefs = { ...DEFAULT_COPY, languageStyles: {} as CopyPreferences['languageStyles'] }; if (!value || typeof value !== 'object') return prefs;
   const raw = value as Record<string, unknown>;
-  for (const key of ['followReader','includeSpeaker','languageLabels','preserveBreaks','boldSpeaker','headingColon'] as const) if (typeof raw[key] === 'boolean') prefs[key] = raw[key];
+  for (const key of ['followReader','includeSpeaker','languageLabels','preserveBreaks','boldSpeaker','headingColon','includeDate','includeSource','boldHeader'] as const) if (typeof raw[key] === 'boolean') prefs[key] = raw[key];
+  if (raw.dateMode==='today'||raw.dateMode==='custom') prefs.dateMode=raw.dateMode;
+  if (raw.sourceMode==='full'||raw.sourceMode==='short'||raw.sourceMode==='custom') prefs.sourceMode=raw.sourceMode;
+  if (typeof raw.customDate==='string'&&validCopyDate(raw.customDate)) prefs.customDate=raw.customDate;
+  if (typeof raw.customSource==='string') prefs.customSource=raw.customSource.slice(0,2000);
   if (raw.repeatSpeaker === 'always' || raw.repeatSpeaker === 'changes') prefs.repeatSpeaker = raw.repeatSpeaker;
   if (raw.speakerLayout === 'inline' || raw.speakerLayout === 'heading') prefs.speakerLayout = raw.speakerLayout;
   if (raw.copyFormat === 'rich' || raw.copyFormat === 'plain') prefs.copyFormat = raw.copyFormat;
-  for (const key of ['speakerSeparator','languageSeparator','sentenceSeparator'] as const) if (typeof raw[key] === 'string') prefs[key] = raw[key].slice(0, 80);
+  for (const key of ['speakerSeparator','languageSeparator','sentenceSeparator','headerSeparator'] as const) if (typeof raw[key] === 'string') prefs[key] = raw[key].slice(0, 80);
   if (raw.speakerMode === 'auto' || raw.speakerMode === 'uniform') prefs.speakerMode = raw.speakerMode;
   else if (typeof raw.speakerSeparator === 'string' && raw.speakerSeparator !== '：') prefs.speakerMode = 'uniform';
   if (raw.languageStyles && typeof raw.languageStyles === 'object') {
@@ -73,7 +82,7 @@ export function copyLanguages(prefs: CopyPreferences, available: LanguageCode[],
 }
 type CopyToken = { text: string; bold?: boolean }
 const escapeHtml = (text: string) => text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-export function formatCopyPayload(blocks: CopyBlock[], available: LanguageCode[], prefs: CopyPreferences, traveler: Traveler = 'aether', only?: LanguageCode): CopyPayload {
+export function formatCopyPayload(blocks: CopyBlock[], available: LanguageCode[], prefs: CopyPreferences, traveler: Traveler = 'aether', only?: LanguageCode, context:CopyDocumentContext = {}): CopyPayload {
   const languages = copyLanguages(prefs, available, only);
   const clean = (value: string) => { const text = formatGameText(value, traveler); return prefs.preserveBreaks ? text : text.replace(/\s*\n\s*/g, ' '); };
   const previous = new Map<LanguageCode, { speaker: string; context?: string; ordinal?: number }>();
@@ -100,6 +109,14 @@ export function formatCopyPayload(blocks: CopyBlock[], available: LanguageCode[]
   const tokens = prefs.grouping === 'language'
     ? join(languages.map(lang => join(blocks.map(block => render(block,lang)),prefs.sentenceSeparator)),prefs.languageSeparator)
     : join(blocks.map(block => join(languages.map(lang => render(block,lang)),prefs.languageSeparator)),prefs.sentenceSeparator);
+  if (tokens.length && context.allowHeader!==false) {
+    const headers:CopyToken[][]=[];
+    const date=prefs.includeDate ? dottedCopyDate(prefs.dateMode==='custom' ? prefs.customDate : localCopyDate(context.now)) : '';
+    const source=prefs.includeSource ? formatCopySource(context.source,prefs.sourceMode,prefs.customSource) : '';
+    if (date) headers.push([{text:date,bold:prefs.boldHeader}]);
+    if (source) headers.push([{text:source,bold:prefs.boldHeader}]);
+    if (headers.length) tokens.unshift(...join(headers,'\n'),{text:prefs.headerSeparator});
+  }
   const lines = [''];
   for (const token of tokens) {
     token.text.split('\n').forEach((part,index) => {
@@ -111,6 +128,6 @@ export function formatCopyPayload(blocks: CopyBlock[], available: LanguageCode[]
   const fragment = text ? lines.map(line=>`<p style="margin:0;white-space:pre-wrap">${line || '<br>'}</p>`).join('') : '';
   return { text, html:`<html><body><!--StartFragment--><div style="font-weight:400">${fragment}</div><!--EndFragment--></body></html>` };
 }
-export function formatCopy(blocks: CopyBlock[], available: LanguageCode[], prefs: CopyPreferences, traveler: Traveler = 'aether', only?: LanguageCode): string {
-  return formatCopyPayload(blocks,available,prefs,traveler,only).text;
+export function formatCopy(blocks: CopyBlock[], available: LanguageCode[], prefs: CopyPreferences, traveler: Traveler = 'aether', only?: LanguageCode, context:CopyDocumentContext = {}): string {
+  return formatCopyPayload(blocks,available,prefs,traveler,only,context).text;
 }

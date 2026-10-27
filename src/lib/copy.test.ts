@@ -62,7 +62,7 @@ describe('Word copy layout',()=>{
     {key:'c',nodeId:'3',variant:0,kind:'narration',speaker:{zh:'',en:''},text:{zh:'风吹过。',en:'Wind.'}},
     {key:'d',nodeId:'4',variant:0,kind:'dialogue',speaker,text:{zh:'第三段。',en:'Third.'}},
   ]};
-  const preset=wordCopyPreset(DEFAULT_COPY);
+  const preset={...wordCopyPreset(DEFAULT_COPY),includeDate:false,includeSource:false};
   it('matches the reference: one bold name heading, single line breaks, separate language sections',()=>{
     const payload=formatCopyPayload(copyBlocksForScenes([{...scene,lines:scene.lines.slice(0,2)}]),['CHS','EN'],preset);
     expect(payload.text).toBe('派蒙：\n第一段。\n第二段。\n——\nPaimon:\nFirst.\nSecond.');

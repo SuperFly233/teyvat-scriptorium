@@ -1,3 +1,4 @@
+import { buildCopySource } from './lib/copySource';
 import {
   createContext,
   useContext,
@@ -58,7 +59,7 @@ import { enrichBranches } from "./lib/branches";
 import { buildPrintMeta } from "./lib/printMeta";
 import { formatGameText, normalizeSearch } from "./lib/text";
 import { ReadingProvider, ReadingShelf, ReaderTools, LineTools, useStudyLanguage } from './components/ReadingTools';
-import { CopyProvider, CopyButton, CopySettings } from './components/CopyTools';
+import { CopyProvider, CopyButton, CopySettings, useCopySource } from './components/CopyTools';
 import { copyBlocksForScenes } from './lib/copy';
 import type {
   AppSettings,
@@ -213,7 +214,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.11.0";
+const APP_VERSION = "v0.12.0";
 const DialogueContext = createContext<{ data: ChapterData; questId: number } | null>(null);
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
@@ -1633,6 +1634,7 @@ function Reader({
   basketLines,
   guideRequest,
   seriesNav,
+  catalogItem,
 }: {
   data: ChapterData;
   settings: AppSettings;
@@ -1645,6 +1647,7 @@ function Reader({
   basketSources: number;
   basketLines: number;
   guideRequest: number;
+  catalogItem?: CatalogItem;
   seriesNav?: {
     previous?: CatalogItem;
     next?: CatalogItem;
@@ -1697,6 +1700,8 @@ function Reader({
   const liveLanguageWidths = useRef(languageWidths);
   const activeQuest =
     data.quests.find((q) => q.id === questId) || data.quests[0];
+  const copySource = useMemo(() => buildCopySource(data,activeQuest,catalogItem),[data,activeQuest,catalogItem]);
+  useCopySource(copySource);
   const speakerKey = (line: DialogueLine) =>
     line.speaker.zh || line.speaker.en || "__narration";
   const availableSpeakers = useMemo(
@@ -2115,9 +2120,9 @@ function Reader({
           <span className="eyebrow">
             {localized(data.chapter.number, activeLanguages[0])} ·{" "}
             {localized(data.chapter.region, activeLanguages[0])}
-            <b>{localized(data.chapter.title, activeLanguages[0])}<CopyButton label="复制章节标题" compact blocks={[{ text: data.chapter.title }]} languages={activeLanguages} traveler={traveler}/></b>
+            <b>{localized(data.chapter.title, activeLanguages[0])}<CopyButton withHeader={false} label="复制章节标题" compact blocks={[{ text: data.chapter.title }]} languages={activeLanguages} traveler={traveler}/></b>
           </span>
-          <h1>{localized(activeQuest.title, activeLanguages[0])}<CopyButton label="复制任务标题" compact blocks={[{ text: activeQuest.title }]} languages={activeLanguages} traveler={traveler}/></h1>
+          <h1>{localized(activeQuest.title, activeLanguages[0])}<CopyButton withHeader={false} label="复制任务标题" compact blocks={[{ text: activeQuest.title }]} languages={activeLanguages} traveler={traveler}/></h1>
           {activeLanguages.slice(1).map((lang) => (
             <h2 key={lang}>{localized(activeQuest.title, lang)}</h2>
           ))}
@@ -2128,11 +2133,11 @@ function Reader({
               localized(activeQuest.description, lang) && (
                 <p lang={languageInfo(lang).locale} key={lang}>
                   {localized(activeQuest.description, lang)}
-                  <CopyButton label={`复制${lang}引入文本`} compact only={lang} blocks={[{ text: activeQuest.description }]} languages={activeLanguages} traveler={traveler}/>
+                  <CopyButton withHeader={false} label={`复制${lang}引入文本`} compact only={lang} blocks={[{ text: activeQuest.description }]} languages={activeLanguages} traveler={traveler}/>
                 </p>
               ),
           )}
-          {activeLanguages.some(lang => localized(activeQuest.description, lang)) && <CopyButton label="复制引入文本" blocks={[{ text: activeQuest.description }]} languages={activeLanguages} traveler={traveler}/>}
+          {activeLanguages.some(lang => localized(activeQuest.description, lang)) && <CopyButton withHeader={false} label="复制引入文本" blocks={[{ text: activeQuest.description }]} languages={activeLanguages} traveler={traveler}/>}
         </div>
       </section>
       <div className="reader-workspace">
@@ -2841,7 +2846,7 @@ function SceneBlock({
         <span>SCENE {String(sceneIndex + 1).padStart(2, "0")}</span>
         <div>
           <h3>{localized(scene.title, languages[0])}</h3>
-          <CopyButton label="复制场景标题" compact blocks={[{ text: scene.title }]} languages={languages} traveler={traveler}/>
+          <CopyButton withHeader={false} label="复制场景标题" compact blocks={[{ text: scene.title }]} languages={languages} traveler={traveler}/>
           {languages.slice(1).map((lang) => (
             <p title={localized(scene.title, lang)} key={lang}>
               {localized(scene.title, lang)}
@@ -2850,7 +2855,7 @@ function SceneBlock({
         </div>
         <em>{scene.lines.length} 句</em>
       </header>
-      {languages.some(lang => localized(scene.description, lang)) && <CopyButton label="复制场景引入" blocks={[{ text: scene.description }]} languages={languages} traveler={traveler}/>}
+      {languages.some(lang => localized(scene.description, lang)) && <CopyButton withHeader={false} label="复制场景引入" blocks={[{ text: scene.description }]} languages={languages} traveler={traveler}/>}
       {tipVisible && (
         <aside className="scene-lead">
           <Info size={14} />
@@ -4727,6 +4732,16 @@ function Modal({
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
             <article>
+              <span>v0.12.0 · 2026-10-27</span>
+              <h3>日期与来源题头</h3>
+              <ul>
+                <li>复制可添加当天或指定日期，格式为 2026.10.27。</li>
+                <li>来源自动组合版本、地区、任务类型、章幕与任务标题，可切换简短格式或自定义。</li>
+                <li>日期与来源可分别开关，支持加粗和自定义间隔；整份多语言稿只添加一次。</li>
+                <li>“Word 分语言稿”预设包含题头，自动来源随当前任务切换。</li>
+              </ul>
+            </article>
+            <article>
               <span>v0.11.0 · 2026-10-26</span>
               <h3>Word 分语言稿</h3>
               <ul>
@@ -5401,6 +5416,7 @@ function AppContent() {
           basketSources={basket.length}
           basketLines={basketLines}
           guideRequest={guideRequest}
+          catalogItem={catalog?.items.find(item => item.id === chapter.chapter.id)}
           seriesNav={seriesNav}
         />
       )}

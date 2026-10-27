@@ -20,6 +20,7 @@ try{
   for(const lang of ['CHS','EN']){names[lang]=await pair[0].locator(`[data-language=${lang}] strong`).innerText();texts[lang]=await Promise.all(pair.map(row=>row.locator(`[data-language=${lang}] p`).innerText()))}
   await page.locator('.selection-toggle').click();await pair[0].locator('.line-select').click();await pair[1].locator('.line-select').click();await page.getByRole('button',{name:'复制这些文本的格式选项',exact:true}).click()
   let dialog=page.getByRole('dialog',{name:'复制选项'});await dialog.getByRole('button',{name:'Word 分语言稿',exact:true}).click()
+  await dialog.getByText('日期与来源',{exact:true}).click();await dialog.getByLabel('添加日期',{exact:true}).uncheck();await dialog.getByLabel('添加来源',{exact:true}).uncheck()
   const expected=`${names.CHS}：\n${texts.CHS.join('\n')}\n——\n${names.EN}:\n${texts.EN.join('\n')}`
   assert.equal(await dialog.getByLabel('复制预览').inputValue(),expected)
   assert.equal(await dialog.getByRole('region',{name:'富文本预览'}).locator('strong').count(),2)
