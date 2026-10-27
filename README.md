@@ -4,6 +4,8 @@
 
 线上站点：[teyvat-scriptorium.pages.dev](https://teyvat-scriptorium.pages.dev)
 
+界面变更必须遵循[界面审核 SOP](docs/ui-review-sop.md)，运行 `npm run qa:themes` 检查深浅主题、桌面/手机与交互状态。
+
 ## 本地运行
 
 ```bash

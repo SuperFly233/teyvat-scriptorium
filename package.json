@@ -1,7 +1,7 @@
 {
   "name": "teyvat-scriptorium",
   "private": true,
-  "version": "0.12.0",
+  "version": "0.12.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,7 +24,8 @@
     "qa:reading-tools": "npm run build && node scripts/qa-reading-tools.mjs",
     "qa:copy": "npm run build && node scripts/qa-copy.mjs",
     "qa:word-copy": "npm run build && node scripts/qa-word-copy.mjs",
-    "publish:pages": "npm test && npm run build && wrangler pages deploy ./dist --project-name teyvat-scriptorium --branch main",
+    "qa:themes": "npm run build && node scripts/qa-themes.mjs",
+    "publish:pages": "npm test && npm run build && node scripts/qa-themes.mjs && wrangler pages deploy ./dist --project-name teyvat-scriptorium --branch main",
     "publish": "git push origin main && npm run publish:pages"
   },
   "dependencies": {

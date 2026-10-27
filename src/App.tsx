@@ -214,7 +214,7 @@ const DEFAULT_PRINT: PrintSettings = {
     ],
   },
 };
-const APP_VERSION = "v0.12.0";
+const APP_VERSION = "v0.12.1";
 const DialogueContext = createContext<{ data: ChapterData; questId: number } | null>(null);
 const TYPE_FILTERS = ["aq", "lq", "hq", "wq", "eq", "iq", "other"];
 const NATION_ORDER = [
@@ -4731,6 +4731,11 @@ function Modal({
         </header>
         {eyebrow === "CHANGELOG" && (
           <div className="changelog changelog-latest">
+            <article>
+              <span>v0.12.1 · 2026-10-27</span>
+              <h3>深浅主题可读性修复</h3>
+              <ul><li>统一强调色背景与文字、图标的配套颜色，修复复制、提示、选中和打印等入口。</li><li>增强次要操作的可读性，修复打印密度选中背景，新增深浅主题回归与审核 SOP。</li></ul>
+            </article>
             <article>
               <span>v0.12.0 · 2026-10-27</span>
               <h3>日期与来源题头</h3>

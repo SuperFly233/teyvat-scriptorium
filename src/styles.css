@@ -1,10 +1,14 @@
 :root {
+  color-scheme: light;
   --ink: #17211f;
-  --muted: #66706c;
+  --muted: #59645f;
   --paper: #f4f0e7;
   --paper-2: #fbf8f1;
   --paper-3: #e8e1d4;
   --line: #cec6b7;
+  /* Pair filled accent backgrounds with their theme-specific foregrounds. */
+  --on-red: #fff;
+  --on-green: #fff;
   --red: #a13a31;
   --red-2: #7f2b25;
   --green: #1e3934;
@@ -175,7 +179,7 @@
     height: 18px;
     display: grid;
     place-items: center;
-    color: #fff;
+    color: var(--on-red);
     background: var(--red);
     font: 600 10px/1 sans-serif;
   }
@@ -215,7 +219,7 @@
     font: 600 10px/1 sans-serif;
   }
   .language-list label.active > span {
-    color: #fff;
+    color: var(--on-red);
     background: var(--red);
     border-color: var(--red);
   }
@@ -368,7 +372,7 @@
     margin: 0;
   }
   .featured-roles input:checked + .checkmark {
-    color: #fff;
+    color: var(--on-red);
     background: var(--red);
     border-color: var(--red);
   }
@@ -641,13 +645,16 @@
   font-size: max(3.1pt, calc(var(--doc-font) - 5.9pt));
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --ink: #eae8df;
   --muted: #a3ada9;
   --paper: #15201d;
   --paper-2: #1b2925;
   --paper-3: #0d1614;
   --line: #394a45;
-  --red: #d56d61;
+  --on-red: #15201d;
+  --on-green: #15201d;
+  --red: #e18177;
   --red-2: #e18177;
   --green: #d9e5e1;
   --green-2: #a9c9c2;
@@ -1265,7 +1272,7 @@ body::before {
   border: 1px solid var(--line);
 }
 .scene-list input:checked + .checkmark {
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   border-color: var(--red);
 }
@@ -1327,7 +1334,7 @@ body::before {
   font-size: 9px;
 }
 .view-pills button.active {
-  color: #fff;
+  color: var(--on-green);
   background: var(--green);
 }
 .reader-search {
@@ -1376,7 +1383,7 @@ body::before {
   font-size: 9px;
 }
 .selection-toggle.active {
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   border-color: var(--red);
 }
@@ -1557,7 +1564,7 @@ body::before {
   border: 1px solid var(--line);
 }
 .dialogue-row.selected .line-select > span {
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   border-color: var(--red);
 }
@@ -1570,7 +1577,7 @@ body::before {
   opacity: 0.35;
 }
 .script.is-selecting .dialogue-row.not-selected {
-  opacity: 0.38;
+  opacity: 1;
 }
 .dialogue-main {
   min-width: 0;
@@ -1697,7 +1704,7 @@ body::before {
   align-items: center;
   gap: 7px;
   border: 0;
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   box-shadow: var(--shadow);
   font-size: 10px;
@@ -1802,7 +1809,7 @@ body::before {
   font-size: 8px;
 }
 .segment button.active {
-  color: #fff;
+  color: var(--on-green);
   background: var(--green);
 }
 .switch {
@@ -1898,7 +1905,7 @@ body::before {
   background: color-mix(in srgb, var(--paper-2) 92%, var(--red));
 }
 .source-strategy-cards button.active > span {
-  color: #fff;
+  color: var(--on-red);
   border-color: var(--red);
   background: var(--red);
 }
@@ -2027,7 +2034,7 @@ body::before {
   border: 1px solid var(--line);
 }
 .print-toggles input:checked + span {
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   border-color: var(--red);
 }
@@ -2207,7 +2214,7 @@ body::before {
 }
 .primary-action {
   border: 0;
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
 }
 .secondary-action {
@@ -2733,7 +2740,7 @@ body::before {
 }
 .progress-actions button:first-child {
   border: 0;
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
 }
 .notice-toast {
@@ -3125,7 +3132,7 @@ body::before {
     background: #8e342c;
   }
   .mobile-action-dock button:last-child {
-    color: #fff;
+    color: var(--on-red);
     background: var(--red);
   }
   .modal-backdrop {
@@ -3216,7 +3223,7 @@ body::before {
   padding: 0 3px;
   display: flex;
   align-items: center;
-  color: #fff;
+  color: var(--on-green);
   background: var(--green);
   box-shadow: var(--shadow);
 }
@@ -3252,7 +3259,7 @@ body::before {
   font-size: 8px;
 }
 .role-filter > button.active {
-  color: #fff;
+  color: var(--on-green);
   background: var(--green);
 }
 .role-filter-popover {
@@ -3337,7 +3344,7 @@ body::before {
   border: 1px solid var(--line);
 }
 .role-filter-list input:checked + .checkmark {
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   border-color: var(--red);
 }
@@ -3473,6 +3480,8 @@ body::before {
     --paper-2: #fff;
     --paper-3: #fff;
     --line: #bbb;
+    --on-red: #fff;
+    --on-green: #fff;
     --red: #8d3028;
     color-scheme: light;
   }
@@ -4619,7 +4628,7 @@ html[data-print-page-slot="footer-right"] {
 .quest-tabs .quest-add-act {
   min-width: 210px;
   margin-left: auto;
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   border-color: var(--red);
 }
@@ -5282,7 +5291,7 @@ body:has(.print-studio) .notice-toast {
     border: 1px solid var(--line);
   }
   .scene-list-row.visible .checkmark {
-    color: #fff;
+    color: var(--on-red);
     background: var(--red);
     border-color: var(--red);
   }
@@ -5440,7 +5449,7 @@ body:has(.print-studio) .notice-toast {
   font-size: 14px;
 }
 .reader-guide .guide-next {
-  color: #fff;
+  color: var(--on-red);
   border-color: var(--red);
   background: var(--red);
 }
@@ -5557,7 +5566,7 @@ body:has(.print-studio) .notice-toast {
   box-shadow: inset 3px 0 var(--red);
 }
 .selection-toggle.active {
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   box-shadow: 0 7px 18px rgb(142 52 44 / 22%);
 }
@@ -5631,7 +5640,7 @@ body:has(.print-studio) .notice-toast {
   min-height: 46px;
   margin-left: auto;
   border: 0;
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   box-shadow: 0 8px 22px rgb(142 52 44 / 25%);
   font-weight: 650;
@@ -5675,7 +5684,7 @@ body:has(.print-studio) .notice-toast {
   justify-content: center;
   gap: 9px;
   border: 0;
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   font-size: 13px;
 }
@@ -5722,7 +5731,7 @@ body:has(.print-studio) .notice-toast {
   display: grid;
   place-items: center;
   border-radius: 10px;
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   font:
     650 10px/1 "Newsreader Variable",
@@ -5748,7 +5757,7 @@ body:has(.print-studio) .notice-toast {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   font-size: 13px;
 }
@@ -5911,7 +5920,7 @@ body:has(.print-studio) .notice-toast {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgb(255 255 255 / 15%);
+  background: rgb(0 0 0 / 18%);
   font:
     600 9px/1 "Newsreader Variable",
     serif;
@@ -6066,7 +6075,7 @@ button[aria-label*="Post" i],
   .act-queue-action small {
     position: absolute;
     margin: -28px 0 0 25px;
-    background: #c5574c;
+    background: #993c34;
   }
   .chapter-nav-shell .mobile-scene-button {
     width: 42px;
@@ -6314,7 +6323,7 @@ button[aria-label*="Post" i],
   border: 1px solid var(--line);
 }
 .multi-filter label input:checked + span {
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   border-color: var(--red);
 }
@@ -6475,7 +6484,7 @@ button[aria-label*="Post" i],
     serif;
 }
 .journey-timeline > header aside small {
-  color: #8fa8a0;
+  color: #a6bbb3;
   font-size: 9px;
 }
 .timeline-scroll {
@@ -6592,7 +6601,7 @@ button[aria-label*="Post" i],
 }
 .timeline-archon span {
   margin-top: 7px;
-  color: #8fa8a0;
+  color: #a6bbb3;
   font-size: 9px;
 }
 .timeline-cluster {
@@ -6610,7 +6619,7 @@ button[aria-label*="Post" i],
 }
 .timeline-cluster > span {
   margin-top: 3px;
-  color: #8fa8a0;
+  color: #a6bbb3;
   font-size: 9px;
 }
 .timeline-cluster button {
@@ -6810,7 +6819,7 @@ button[aria-label*="Post" i],
   border: 1px solid var(--line);
 }
 .filter-popover label input:checked + span {
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   border-color: var(--red);
 }
@@ -6994,7 +7003,7 @@ button[aria-label*="Post" i],
   font-weight: 650;
 }
 .country-group-heading small {
-  color: #8fa8a0;
+  color: #a6bbb3;
   font-size: 9px;
 }
 .country-group-heading svg {
@@ -7047,7 +7056,7 @@ button[aria-label*="Post" i],
   font-size: 10px;
 }
 .timeline-task-group summary span {
-  color: #789188;
+  color: #a6bbb3;
   font-size: 9px;
 }
 .timeline-task-group[open] summary svg {
@@ -7093,7 +7102,7 @@ button[aria-label*="Post" i],
 }
 .timeline-task-group button span {
   margin-top: 4px;
-  color: #8fa8a0;
+  color: #a6bbb3;
   font-size: 8px;
 }
 .timeline-task-group.type-aq {
@@ -7298,7 +7307,7 @@ button[aria-label*="Post" i],
   display: block;
   max-width: 220px;
   overflow: hidden;
-  color: #8fa8a0;
+  color: #a6bbb3;
   font:
     500 10px/1.1 "Newsreader Variable",
     serif;
@@ -7512,12 +7521,12 @@ button[aria-label*="Post" i],
 }
 .density-presets button.active {
   border-color: var(--red);
-  color: #fff;
-  background: var(--deep);
+  color: var(--on-green);
+  background: var(--green);
   box-shadow: inset 3px 0 0 var(--red);
 }
 .density-presets button.active small {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--on-green);
 }
 
 /* General and compact presets share a restrained editorial masthead. */
